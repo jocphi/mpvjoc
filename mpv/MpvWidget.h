@@ -38,6 +38,7 @@ public:
     void showScaleOverlay();
     void showVolumeOverlay(double volume,bool muted);
     void toggleInfoOverlay();
+    void setWarpOverlay(bool active,int factor);
 protected:
     void initializeGL()override;
     void paintGL()override;
