@@ -1,4 +1,5 @@
 #include "PlaylistDelegate.h"
+#include "PlaylistBadges.h"
 #include "PlaylistFormatting.h"
 #include "PlaylistModel.h"
 #include "util/Utils.h"
@@ -192,61 +193,15 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     QString heightBadge;
     QColor heightColor(80, 80, 80);
     QString codecBadge = codec;
-    QColor codecColor(72, 72, 72);
-    auto codecKey = codec.toUpper();
-    if (codecKey == "H.264" || codecKey == "AVC")
-        codecColor = QColor(38, 96, 132);
-    else if (codecKey == "HEVC" || codecKey == "H.265")
-        codecColor = QColor(84, 70, 150);
-    else if (codecKey == "AV1")
-        codecColor = QColor(142, 64, 112);
-    else if (codecKey == "VP9")
-        codecColor = QColor(46, 116, 86);
-    else if (codecKey == "VP8")
-        codecColor = QColor(82, 124, 58);
-    else if (codecKey == "MPEG4" || codecKey == "MPEG-4")
-        codecColor = QColor(138, 92, 42);
-    else if (codecKey == "AAC")
-        codecColor = QColor(118, 88, 38);
-    else if (codecKey == "MP3")
-        codecColor = QColor(116, 64, 38);
-    else if (codecKey == "FLAC")
-        codecColor = QColor(38, 112, 120);
-    else if (codecKey == "OPUS")
-        codecColor = QColor(98, 76, 130);
+    QColor codecColor = codecBadgeColor(codec);
+
     int vh = 0;
     QStringList rp = res.split('x');
     if (rp.size() == 2)
         vh = rp[1].toInt();
     if (vh > 0) {
-        int tier = vh >= 2160 ? 2160 : (vh >= 1440 ? 1440 : (vh >= 1080 ? 1080 : (vh >= 720 ? 720 : 480)));
-        heightBadge = QString::number(tier) + "p";
-        auto lerp = [](int a, int b, double t) { return int(a + (b - a) * qBound(0.0, t, 1.0) + 0.5); };
-        auto mix = [&](QColor a, QColor b, double t) {
-            return QColor(lerp(a.red(), b.red(), t), lerp(a.green(), b.green(), t), lerp(a.blue(), b.blue(), t));
-        };
-        if (vh < 700) {
-            double t = (qBound(80, vh, 699) - 80) / double(699 - 80);
-            double peak = (480 - 80) / double(699 - 80);
-            heightColor = t <= peak ? mix(QColor(70, 0, 0), QColor(255, 0, 0), t / peak)
-                                    : mix(QColor(255, 0, 0), QColor(255, 150, 150), (t - peak) / (1.0 - peak));
-        } else if (vh < 1000) {
-            double t = (vh - 700) / double(999 - 700);
-            double peak = (720 - 700) / double(999 - 700);
-            heightColor = t <= peak ? mix(QColor(0, 70, 0), QColor(0, 255, 0), t / peak)
-                                    : mix(QColor(0, 255, 0), QColor(170, 255, 170), (t - peak) / (1.0 - peak));
-        } else if (vh < 2000) {
-            double t = (vh - 1000) / double(1999 - 1000);
-            double peak = (1080 - 1000) / double(1999 - 1000);
-            heightColor = t <= peak ? mix(QColor(0, 30, 90), QColor(0, 170, 255), t / peak)
-                                    : mix(QColor(0, 170, 255), QColor(170, 220, 255), (t - peak) / (1.0 - peak));
-        } else {
-            int capped = qMin(vh, 4320);
-            double t = (capped - 2000) / double(4320 - 2000);
-            double peak = (2160 - 2000) / double(4320 - 2000);
-            heightColor = t <= peak ? mix(QColor(65, 0, 90), QColor(210, 90, 255), t / peak)
-                                    : mix(QColor(210, 90, 255), QColor(235, 190, 255), (t - peak) / (1.0 - peak));
-        }
+        heightBadge = resolutionBadgeText(vh);
+        heightColor = resolutionBadgeColor(vh);
     }
     QRect titleRect(x, r.top() + 7, r.width() - x + r.left() - 90, 20);
     drawPlaylistHighlightedTitle(p, titleRect, title);

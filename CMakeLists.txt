@@ -16,6 +16,7 @@ add_executable(mpvjoc
     playlist/PlaylistModel.cpp
     playlist/PlaylistDelegate.cpp
     playlist/PlaylistFormatting.cpp
+    playlist/PlaylistBadges.cpp
     media/MetadataProbeManager.cpp
     media/ThumbnailManager.cpp
     ui/TimelineWidget.cpp
