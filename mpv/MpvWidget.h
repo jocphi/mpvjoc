@@ -28,6 +28,8 @@ public:
     void seekRelative(double s);
     void setMaxVideoScale(double scale);
     void showPlaybackOverlay(bool paused);
+    void showScaleOverlay();
+    void showVolumeOverlay(double volume,bool muted);
 protected:
     void initializeGL()override;
     void paintGL()override;
@@ -45,4 +47,6 @@ private:
     qint64 videoDisplayWidth=0;
     qint64 videoDisplayHeight=0;
     double maxVideoScale=1.0;
+    QString overlayScaleText()const;
+    QString overlayDimensionsText()const;
 };
