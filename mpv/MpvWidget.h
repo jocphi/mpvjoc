@@ -27,6 +27,7 @@ public:
     void seekAbsolute(double s);
     void seekRelative(double s);
     void setMaxVideoScale(double scale);
+    void setCropVideoToScale(bool crop);
     void showPlaybackOverlay(bool paused);
     void showScaleOverlay();
     void showVolumeOverlay(double volume,bool muted);
@@ -50,6 +51,9 @@ private:
     qint64 videoDisplayWidth=0;
     qint64 videoDisplayHeight=0;
     double maxVideoScale=1.0;
+    bool cropVideoToScale=true;
+    double effectiveVideoScale()const;
+    void applyVideoScale();
     QString overlayScaleText()const;
     QString overlayDimensionsText()const;
 };
