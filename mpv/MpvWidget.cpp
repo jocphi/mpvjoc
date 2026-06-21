@@ -13,6 +13,8 @@
 #include <QPaintEvent>
 #include <QTimer>
 #include <QPolygonF>
+#include <QPen>
+#include <QStringList>
 #include <QtGlobal>
 #include <QFont>
 #include <QResizeEvent>
@@ -27,11 +29,13 @@ public:
         setAttribute(Qt::WA_TranslucentBackground,true);
         hide();
     }
-    void showOverlay(bool paused,const QString& scale,const QString& details=QString(),bool showIcon=true,bool persistent=false){
+    void showOverlay(bool paused,const QString& scale,const QString& details=QString(),bool showIcon=true,bool persistent=false,const QSize& viewport=QSize(),const QSize& rendered=QSize()){
         pauseIcon=paused;
         scaleText=scale;
         detailsText=details;
         iconVisible=showIcon;
+        viewportSize=viewport;
+        renderedSize=rendered;
         int g=++generation;
         show();
         raise();
@@ -72,19 +76,92 @@ protected:
             qreal textY=iconVisible?(height()/2.0+icon*0.30):(height()/2.0-icon*0.16);
             QRectF textRect(0,textY,width(),icon*0.32);
             p.drawText(textRect,Qt::AlignHCenter|Qt::AlignVCenter,scaleText);
+
             if(!detailsText.isEmpty()){
-                QFont small=font; small.setBold(false); small.setPointSizeF(qBound(9.0,icon*0.11,18.0));
+                QFont small=font;
+                small.setBold(false);
+                small.setPointSizeF(qBound(9.0,icon*0.11,18.0));
                 p.setFont(small);
-                QRectF detailsRect(0,textY+icon*0.26,width(),icon*0.24);
-                p.drawText(detailsRect,Qt::AlignHCenter|Qt::AlignVCenter,detailsText);
+                p.setPen(QColor(255,255,255,235));
+
+                QStringList dimensionLines=detailsText.split(QStringLiteral("\n"));
+                QString sourceText=dimensionLines.value(0);
+                QString actualText=dimensionLines.value(1);
+                if(actualText.isEmpty())actualText=detailsText;
+
+                const qreal margin=qMax(12.0,icon*0.12);
+                const qreal maxMapW=icon*1.55;
+                const qreal maxMapH=icon*0.72;
+                QFontMetricsF fm(small);
+                const qreal textHeight=fm.height();
+
+                qreal mapW=maxMapW;
+                qreal mapH=maxMapH;
+                QRectF viewportRect;
+                QRectF videoRect;
+                QRectF visibleRect;
+                QRectF unionRect;
+                bool hasMap=false;
+
+                if(viewportSize.isValid()&&renderedSize.isValid()){
+                    const qreal vw=viewportSize.width();
+                    const qreal vh=viewportSize.height();
+                    const qreal rw=renderedSize.width();
+                    const qreal rh=renderedSize.height();
+                    viewportRect=QRectF(0,0,vw,vh);
+                    videoRect=QRectF((vw-rw)/2.0,(vh-rh)/2.0,rw,rh);
+                    visibleRect=viewportRect.intersected(videoRect);
+                    unionRect=viewportRect.united(videoRect);
+                    const qreal mapScale=qMin(maxMapW/unionRect.width(),maxMapH/unionRect.height());
+                    mapW=unionRect.width()*mapScale;
+                    mapH=unionRect.height()*mapScale;
+                    hasMap=true;
+                }
+
+                const qreal textW=qMax(fm.horizontalAdvance(sourceText),fm.horizontalAdvance(actualText));
+                const qreal groupW=qMax(mapW,textW)+8.0;
+                const qreal groupRight=width()-margin;
+                const qreal groupBottom=height()-margin;
+                const qreal sourceY=groupBottom-textHeight-3.0-mapH-3.0-textHeight;
+                const QRectF sourceRect(groupRight-groupW,sourceY,groupW,textHeight);
+                const QRectF actualRect(groupRight-groupW,sourceY+textHeight+3.0+mapH+3.0,groupW,textHeight);
+                const QPointF mapCenter(groupRight-groupW/2.0,sourceY+textHeight+3.0+mapH/2.0);
+
+                p.drawText(sourceRect,Qt::AlignHCenter|Qt::AlignVCenter,sourceText);
+
+                if(hasMap){
+                    const qreal mapScale=mapW/unionRect.width();
+                    auto mapRect=[&](const QRectF&r){
+                        return QRectF(mapCenter.x()+(r.left()-unionRect.center().x())*mapScale,
+                                      mapCenter.y()+(r.top()-unionRect.center().y())*mapScale,
+                                      r.width()*mapScale,
+                                      r.height()*mapScale);
+                    };
+                    QRectF redRect=mapRect(videoRect);
+                    QRectF greenRect=mapRect(visibleRect);
+                    QRectF whiteRect=mapRect(viewportRect);
+                    p.setPen(Qt::NoPen);
+                    p.setBrush(QColor(255,0,0,220));
+                    p.drawRect(redRect);
+                    p.setBrush(QColor(40,255,0,235));
+                    p.drawRect(greenRect);
+                    p.setBrush(Qt::NoBrush);
+                    p.setPen(QPen(QColor(255,255,255,245),qMax(1.0,icon*0.015)));
+                    p.drawRect(whiteRect);
+                    p.setPen(QColor(255,255,255,235));
+                }
+
+                p.drawText(actualRect,Qt::AlignHCenter|Qt::AlignVCenter,actualText);
             }
-        }
+}
     }
 private:
     bool pauseIcon=false;
     bool iconVisible=true;
     QString scaleText;
     QString detailsText;
+    QSize viewportSize;
+    QSize renderedSize;
     int generation=0;
 };
 }
@@ -99,7 +176,12 @@ QString MpvWidget::overlayDimensionsText()const{
     double effective=effectiveVideoScale();
     int actualW=qMax(1,int(videoDisplayWidth*effective+0.5));
     int actualH=qMax(1,int(videoDisplayHeight*effective+0.5));
-    return QString("%1×%2 → %3×%4").arg(videoDisplayWidth).arg(videoDisplayHeight).arg(actualW).arg(actualH);
+    return QString("%1×%2\n%3×%4").arg(videoDisplayWidth).arg(videoDisplayHeight).arg(actualW).arg(actualH);
+}
+QSize MpvWidget::overlayRenderedVideoSize()const{
+    if(videoDisplayWidth<=0||videoDisplayHeight<=0)return QSize();
+    double effective=effectiveVideoScale();
+    return QSize(qMax(1,int(videoDisplayWidth*effective+0.5)),qMax(1,int(videoDisplayHeight*effective+0.5)));
 }
 void MpvWidget::toggleInfoOverlay(){
     infoOverlayPinned=!infoOverlayPinned;
@@ -112,20 +194,20 @@ void MpvWidget::toggleInfoOverlay(){
 void MpvWidget::showScaleOverlay(){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
-    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(infoOverlayPinned?playbackPaused:false,overlayScaleText(),overlayDimensionsText(),infoOverlayPinned,infoOverlayPinned);
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(infoOverlayPinned?playbackPaused:false,overlayScaleText(),overlayDimensionsText(),infoOverlayPinned,infoOverlayPinned,rect().size(),overlayRenderedVideoSize());
 }
 void MpvWidget::showVolumeOverlay(double volume,bool muted){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
     QString label=muted?QStringLiteral("Muted"):QString("Vol %1%").arg(int(volume+0.5));
-    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(false,label,overlayDimensionsText(),false,false);
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(false,label,overlayDimensionsText(),false,false,rect().size(),overlayRenderedVideoSize());
     if(infoOverlayPinned)QTimer::singleShot(750,this,[this]{if(infoOverlayPinned)showScaleOverlay();});
 }
 void MpvWidget::showPlaybackOverlay(bool paused){
     playbackPaused=paused;
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
-    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(paused,overlayScaleText(),overlayDimensionsText(),true,false);
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(paused,overlayScaleText(),overlayDimensionsText(),true,false,rect().size(),overlayRenderedVideoSize());
     if(infoOverlayPinned)QTimer::singleShot(750,this,[this]{if(infoOverlayPinned)showScaleOverlay();});
 }
 
