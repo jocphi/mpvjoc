@@ -1,4 +1,5 @@
 #include "PlaylistDelegate.h"
+#include "PlaylistFormatting.h"
 #include "PlaylistModel.h"
 #include "util/Utils.h"
 #include <QAbstractItemModel>
@@ -125,23 +126,6 @@ static void drawPlaylistHighlightedTitle(QPainter* p, const QRect& rect, const Q
 }
 
 static bool gPlaylistSizeDisplayGB = false;
-static QString formatEuroSize(qint64 bytes, bool gb)
-{
-    if (bytes <= 0)
-        return gb ? QStringLiteral("???,?? GB") : QStringLiteral("???,?? MB");
-    double value = gb ? bytes / (1024.0 * 1024.0 * 1024.0) : bytes / (1024.0 * 1024.0);
-    qint64 cents = qint64(value * 100.0 + 0.5);
-    qint64 whole = cents / 100;
-    int frac = int(cents % 100);
-    QString wholeText = QString::number(whole);
-    for (int pos = wholeText.size() - 3; pos > 0; pos -= 3)
-        wholeText.insert(pos, QChar('.'));
-    return QString("%1,%2 %3")
-        .arg(wholeText)
-        .arg(frac, 2, 10, QChar('0'))
-        .arg(gb ? QStringLiteral("GB") : QStringLiteral("MB"));
-}
-
 bool PlaylistDelegate::editorEvent(
     QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& o, const QModelIndex& i)
 {

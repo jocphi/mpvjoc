@@ -52,3 +52,6 @@ backups/
 *.opus
 *.srt
 *.ass
+
+# Timestamped patch backups
+*.bak-*
