@@ -36,6 +36,7 @@ public:
         iconVisible=showIcon;
         viewportSize=viewport;
         renderedSize=rendered;
+        if(warpActive){scaleText.clear();detailsText.clear();iconVisible=false;viewportSize=QSize();renderedSize=QSize();}
         int g=++generation;
         show();
         raise();
