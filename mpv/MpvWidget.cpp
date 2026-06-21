@@ -46,7 +46,7 @@ public:
     void hideOverlay(){hide();}
     void setWarpState(bool active,int factor){
         warpActive=active;
-        warpFactor=qBound(1,factor,6);
+        warpFactor=qBound(1,factor,9);
         if(warpActive){show();raise();}else if(scaleText.isEmpty()&&detailsText.isEmpty())hide();
         update();
     }
@@ -68,12 +68,15 @@ protected:
         }
         int icon=qBound(64,qMin(width(),height())/5,150);
         QPointF c(width()/2.0,height()/2.0-icon*0.10);
+        const bool centerOverlayVisible=iconVisible||!scaleText.isEmpty()||!detailsText.isEmpty();
         qreal bg=icon*1.35;
         QRectF bgRect(c.x()-bg/2.0,c.y()-bg/2.0,bg,bg);
-        p.setPen(Qt::NoPen);
-        p.setBrush(QColor(0,0,0,145));
-        p.drawRoundedRect(bgRect,bg*0.18,bg*0.18);
-        p.setBrush(QColor(255,255,255,235));
+        if(centerOverlayVisible){
+            p.setPen(Qt::NoPen);
+            p.setBrush(QColor(0,0,0,145));
+            p.drawRoundedRect(bgRect,bg*0.18,bg*0.18);
+            p.setBrush(QColor(255,255,255,235));
+        }
         if(iconVisible&&pauseIcon){
             qreal bw=icon*0.22,bh=icon*0.72,gap=icon*0.18;
             qreal top=c.y()-bh/2.0,lx=c.x()-gap/2.0-bw,rx=c.x()+gap/2.0;
