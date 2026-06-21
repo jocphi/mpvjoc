@@ -12,9 +12,13 @@ pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
 add_executable(mpvjoc
     main.cpp
     util/Utils.cpp
+    util/TextHighlighting.cpp
     mpv/MpvWidget.cpp
     playlist/PlaylistModel.cpp
     playlist/PlaylistDelegate.cpp
+    playlist/PlaylistFormatting.cpp
+    playlist/PlaylistBadges.cpp
+    playlist/PlaylistDurationRuns.cpp
     media/MetadataProbeManager.cpp
     media/ThumbnailManager.cpp
     ui/TimelineWidget.cpp
