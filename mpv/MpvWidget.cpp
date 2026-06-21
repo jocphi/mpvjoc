@@ -27,7 +27,7 @@ public:
         setAttribute(Qt::WA_TranslucentBackground,true);
         hide();
     }
-    void showOverlay(bool paused,const QString& scale,const QString& details=QString(),bool showIcon=true){
+    void showOverlay(bool paused,const QString& scale,const QString& details=QString(),bool showIcon=true,bool persistent=false){
         pauseIcon=paused;
         scaleText=scale;
         detailsText=details;
@@ -36,8 +36,10 @@ public:
         show();
         raise();
         update();
+        if(persistent)return;
         QTimer::singleShot(700,this,[this,g]{ if(g==generation)hide(); });
     }
+    void hideOverlay(){hide();}
 protected:
     void paintEvent(QPaintEvent*)override{
         QPainter p(this);
@@ -102,21 +104,31 @@ QString MpvWidget::overlayDimensionsText()const{
     int actualH=qMax(1,int(videoDisplayHeight*actual+0.5));
     return QString("%1×%2 → %3×%4").arg(videoDisplayWidth).arg(videoDisplayHeight).arg(actualW).arg(actualH);
 }
+void MpvWidget::toggleInfoOverlay(){
+    infoOverlayPinned=!infoOverlayPinned;
+    if(infoOverlayPinned){
+        showScaleOverlay();
+    }else if(playbackOverlay){
+        static_cast<PlaybackOverlayWidget*>(playbackOverlay)->hideOverlay();
+    }
+}
 void MpvWidget::showScaleOverlay(){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
-    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(false,overlayScaleText(),overlayDimensionsText(),false);
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(false,overlayScaleText(),overlayDimensionsText(),false,infoOverlayPinned);
 }
 void MpvWidget::showVolumeOverlay(double volume,bool muted){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
     QString label=muted?QStringLiteral("Muted"):QString("Vol %1%").arg(int(volume+0.5));
-    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(false,label,overlayDimensionsText(),false);
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(false,label,overlayDimensionsText(),false,false);
+    if(infoOverlayPinned)QTimer::singleShot(750,this,[this]{if(infoOverlayPinned)showScaleOverlay();});
 }
 void MpvWidget::showPlaybackOverlay(bool paused){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
-    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(paused,overlayScaleText(),overlayDimensionsText(),true);
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(paused,overlayScaleText(),overlayDimensionsText(),true,false);
+    if(infoOverlayPinned)QTimer::singleShot(750,this,[this]{if(infoOverlayPinned)showScaleOverlay();});
 }
 
 MpvWidget::MpvWidget(QWidget*p):QOpenGLWidget(p){forceCLocaleForMpv();setMinimumSize(640,360);setFocusPolicy(Qt::StrongFocus); mpv=mpv_create(); if(!mpv)qFatal("no mpv"); check_mpv_error(mpv_set_option_string(mpv,"terminal","yes")); check_mpv_error(mpv_set_option_string(mpv,"msg-level","all=warn,libmpv_render=fatal")); check_mpv_error(mpv_set_option_string(mpv,"hwdec","auto-safe")); check_mpv_error(mpv_set_option_string(mpv,"video-unscaled","downscale-big")); check_mpv_error(mpv_set_option_string(mpv,"vo","libmpv")); check_mpv_error(mpv_set_option_string(mpv,"input-default-bindings","no")); check_mpv_error(mpv_set_option_string(mpv,"osc","no")); check_mpv_error(mpv_initialize(mpv)); mpv_observe_property(mpv,1,"time-pos",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,2,"duration",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,3,"pause",MPV_FORMAT_FLAG); mpv_observe_property(mpv,4,"path",MPV_FORMAT_STRING); mpv_observe_property(mpv,5,"volume",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,6,"mute",MPV_FORMAT_FLAG); mpv_observe_property(mpv,7,"dwidth",MPV_FORMAT_INT64); mpv_observe_property(mpv,8,"dheight",MPV_FORMAT_INT64); mpv_set_wakeup_callback(mpv,wakeup,this);} 

@@ -30,6 +30,7 @@ public:
     void showPlaybackOverlay(bool paused);
     void showScaleOverlay();
     void showVolumeOverlay(double volume,bool muted);
+    void toggleInfoOverlay();
 protected:
     void initializeGL()override;
     void paintGL()override;
@@ -44,6 +45,7 @@ private:
     mpv_render_context*ctx=nullptr;
     QString cur;
     QWidget* playbackOverlay=nullptr;
+    bool infoOverlayPinned=false;
     qint64 videoDisplayWidth=0;
     qint64 videoDisplayHeight=0;
     double maxVideoScale=1.0;
