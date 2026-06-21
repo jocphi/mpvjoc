@@ -1,4 +1,5 @@
 #include "PlaylistDelegate.h"
+#include "PlaylistDurationRuns.h"
 #include "PlaylistBadges.h"
 #include "PlaylistFormatting.h"
 #include "PlaylistModel.h"
@@ -206,54 +207,10 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     QRect titleRect(x, r.top() + 7, r.width() - x + r.left() - 90, 20);
     drawPlaylistHighlightedTitle(p, titleRect, title);
     QRect durationRect(r.right() - 86, r.top() + 7, 78, 20);
-    auto roundedDuration
-        = [&](const QModelIndex& idx) { return int(idx.data(PlaylistModel::DurationRole).toDouble() + 0.5); };
-    int thisDuration = dk ? int(dur + 0.5) : -1;
-    int runStart = i.row(), runEnd = i.row();
-    if (dk && thisDuration >= 0) {
-        while (runStart > 0) {
-            auto prevIdx = i.sibling(runStart - 1, 0);
-            if (!prevIdx.isValid() || !prevIdx.data(PlaylistModel::DurationKnownRole).toBool()
-                || roundedDuration(prevIdx) != thisDuration)
-                break;
-            --runStart;
-        }
-        while (true) {
-            auto nextIdx = i.sibling(runEnd + 1, 0);
-            if (!nextIdx.isValid() || !nextIdx.data(PlaylistModel::DurationKnownRole).toBool()
-                || roundedDuration(nextIdx) != thisDuration)
-                break;
-            ++runEnd;
-        }
-    }
-    int runLength = runEnd - runStart + 1;
-    if (dk && runLength >= 2) {
-        int duplicateRunIndex = 0;
-        int scan = 0;
-        while (scan < runStart) {
-            auto scanIdx = i.sibling(scan, 0);
-            if (!scanIdx.isValid()) {
-                ++scan;
-                continue;
-            }
-            bool scanKnown = scanIdx.data(PlaylistModel::DurationKnownRole).toBool();
-            int scanDur = scanKnown ? roundedDuration(scanIdx) : -1;
-            int scanEnd = scan;
-            if (scanKnown) {
-                while (true) {
-                    auto nextIdx = i.sibling(scanEnd + 1, 0);
-                    if (!nextIdx.isValid() || !nextIdx.data(PlaylistModel::DurationKnownRole).toBool()
-                        || roundedDuration(nextIdx) != scanDur)
-                        break;
-                    ++scanEnd;
-                }
-            }
-            if (scanKnown && scanEnd > scan)
-                ++duplicateRunIndex;
-            scan = scanEnd + 1;
-        }
+    const DuplicateDurationRunInfo duplicateRun = duplicateDurationRunInfo(i, dk, dur);
+    if (duplicateRun.isDuplicate) {
         p->setPen(Qt::NoPen);
-        p->setBrush((duplicateRunIndex % 2) == 0 ? QColor(18, 45, 82) : QColor(58, 42, 86));
+        p->setBrush(duplicateRun.color);
         p->drawRoundedRect(durationRect.adjusted(0, 1, 0, -1), 3, 3);
     }
     p->setPen(Qt::white);
