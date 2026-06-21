@@ -90,18 +90,14 @@ private:
 }
 
 QString MpvWidget::overlayScaleText()const{
-    if(videoDisplayWidth<=0||videoDisplayHeight<=0||width()<=0||height()<=0)return QString();
-    double fit=qMin(width()/double(videoDisplayWidth),height()/double(videoDisplayHeight));
-    double actual=qMin(maxVideoScale,fit);
-    int percent=qMax(1,int(actual*100.0+0.5));
+    if(videoDisplayWidth<=0||videoDisplayHeight<=0)return QString();
+    int percent=qMax(1,int(maxVideoScale*100.0+0.5));
     return QString::number(percent)+"%";
 }
 QString MpvWidget::overlayDimensionsText()const{
-    if(videoDisplayWidth<=0||videoDisplayHeight<=0||width()<=0||height()<=0)return QString();
-    double fit=qMin(width()/double(videoDisplayWidth),height()/double(videoDisplayHeight));
-    double actual=qMin(maxVideoScale,fit);
-    int actualW=qMax(1,int(videoDisplayWidth*actual+0.5));
-    int actualH=qMax(1,int(videoDisplayHeight*actual+0.5));
+    if(videoDisplayWidth<=0||videoDisplayHeight<=0)return QString();
+    int actualW=qMax(1,int(videoDisplayWidth*maxVideoScale+0.5));
+    int actualH=qMax(1,int(videoDisplayHeight*maxVideoScale+0.5));
     return QString("%1×%2 → %3×%4").arg(videoDisplayWidth).arg(videoDisplayHeight).arg(actualW).arg(actualH);
 }
 void MpvWidget::toggleInfoOverlay(){
@@ -132,7 +128,7 @@ void MpvWidget::showPlaybackOverlay(bool paused){
     if(infoOverlayPinned)QTimer::singleShot(750,this,[this]{if(infoOverlayPinned)showScaleOverlay();});
 }
 
-MpvWidget::MpvWidget(QWidget*p):QOpenGLWidget(p){forceCLocaleForMpv();setMinimumSize(640,360);setFocusPolicy(Qt::StrongFocus); mpv=mpv_create(); if(!mpv)qFatal("no mpv"); check_mpv_error(mpv_set_option_string(mpv,"terminal","yes")); check_mpv_error(mpv_set_option_string(mpv,"msg-level","all=warn,libmpv_render=fatal")); check_mpv_error(mpv_set_option_string(mpv,"hwdec","auto-safe")); check_mpv_error(mpv_set_option_string(mpv,"video-unscaled","downscale-big")); check_mpv_error(mpv_set_option_string(mpv,"vo","libmpv")); check_mpv_error(mpv_set_option_string(mpv,"input-default-bindings","no")); check_mpv_error(mpv_set_option_string(mpv,"osc","no")); check_mpv_error(mpv_initialize(mpv)); mpv_observe_property(mpv,1,"time-pos",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,2,"duration",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,3,"pause",MPV_FORMAT_FLAG); mpv_observe_property(mpv,4,"path",MPV_FORMAT_STRING); mpv_observe_property(mpv,5,"volume",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,6,"mute",MPV_FORMAT_FLAG); mpv_observe_property(mpv,7,"dwidth",MPV_FORMAT_INT64); mpv_observe_property(mpv,8,"dheight",MPV_FORMAT_INT64); mpv_set_wakeup_callback(mpv,wakeup,this);} 
+MpvWidget::MpvWidget(QWidget*p):QOpenGLWidget(p){forceCLocaleForMpv();setMinimumSize(640,360);setFocusPolicy(Qt::StrongFocus); mpv=mpv_create(); if(!mpv)qFatal("no mpv"); check_mpv_error(mpv_set_option_string(mpv,"terminal","yes")); check_mpv_error(mpv_set_option_string(mpv,"msg-level","all=warn,libmpv_render=fatal")); check_mpv_error(mpv_set_option_string(mpv,"hwdec","auto-safe")); check_mpv_error(mpv_set_option_string(mpv,"video-unscaled","yes")); check_mpv_error(mpv_set_option_string(mpv,"vo","libmpv")); check_mpv_error(mpv_set_option_string(mpv,"input-default-bindings","no")); check_mpv_error(mpv_set_option_string(mpv,"osc","no")); check_mpv_error(mpv_initialize(mpv)); mpv_observe_property(mpv,1,"time-pos",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,2,"duration",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,3,"pause",MPV_FORMAT_FLAG); mpv_observe_property(mpv,4,"path",MPV_FORMAT_STRING); mpv_observe_property(mpv,5,"volume",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,6,"mute",MPV_FORMAT_FLAG); mpv_observe_property(mpv,7,"dwidth",MPV_FORMAT_INT64); mpv_observe_property(mpv,8,"dheight",MPV_FORMAT_INT64); mpv_set_wakeup_callback(mpv,wakeup,this);} 
 MpvWidget::~MpvWidget(){makeCurrent(); if(ctx)mpv_render_context_free(ctx); doneCurrent(); if(mpv)mpv_terminate_destroy(mpv);} 
 void MpvWidget::loadFile(const QString&p){cur=p; QByteArray b=p.toUtf8(); const char*cmd[]={"loadfile",b.constData(),"replace",nullptr}; check_mpv_error(mpv_command_async(mpv,0,cmd));} void MpvWidget::stopPlayback(){cur.clear(); const char*cmd[]={"stop",nullptr}; check_mpv_error(mpv_command_async(mpv,0,cmd)); update();} QString MpvWidget::currentFilePath()const{return cur;} void MpvWidget::togglePause(){const char*cmd[]={"cycle","pause",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));} void MpvWidget::toggleMute(){const char*cmd[]={"cycle","mute",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));} void MpvWidget::changeVolume(double d){QByteArray v=QByteArray::number(d,'f',1); const char*cmd[]={"add","volume",v.constData(),nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));} void MpvWidget::setVolume(double v){QByteArray b=QByteArray::number(qBound(0.0,v,130.0),'f',1); const char*cmd[]={"set","volume",b.constData(),nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));} void MpvWidget::setMute(bool m){const char*cmd[]={"set","mute",m?"yes":"no",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));} void MpvWidget::seekAbsolute(double s){QByteArray b=QByteArray::number(s,'f',3); const char*cmd[]={"seek",b.constData(),"absolute","exact",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));} void MpvWidget::seekRelative(double s){QByteArray b=QByteArray::number(s,'f',3); const char*cmd[]={"seek",b.constData(),"relative","exact",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));}
 void MpvWidget::setMaxVideoScale(double scale){ double clamped=qBound(0.5,scale,2.0); maxVideoScale=clamped; double zoom=std::log2(clamped); QByteArray z=QByteArray::number(zoom,'f',3); const char*cmd[]={"set","video-zoom",z.constData(),nullptr}; check_mpv_error(mpv_command_async(mpv,0,cmd));}
