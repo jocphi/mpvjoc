@@ -1,4 +1,5 @@
 #include "PlaylistDelegate.h"
+#include "util/TextHighlighting.h"
 #include "PlaylistDurationRuns.h"
 #include "PlaylistBadges.h"
 #include "PlaylistFormatting.h"
@@ -16,116 +17,6 @@
 #include <QStyleOptionViewItem>
 #include <QTextStream>
 #include <QtGlobal>
-
-struct PlaylistKeywordRule {
-    QString keyword;
-    QColor color;
-};
-static QString playlistKeywordConfigPath()
-{
-    QString d = QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation);
-    if (d.isEmpty())
-        d = QDir::homePath() + "/.config/mpvjoc";
-    QDir().mkpath(d);
-    return QDir(d).filePath("playlist-keywords.conf");
-}
-static QColor playlistKeywordColor(QString c)
-{
-    c = c.trimmed();
-    QString lc = c.toLower();
-    if (lc == "red")
-        return QColor(220, 70, 70);
-    if (lc == "green")
-        return QColor(70, 180, 95);
-    if (lc == "orange")
-        return QColor(255, 150, 40);
-    if (lc == "blue")
-        return QColor(80, 140, 220);
-    if (lc == "lila" || lc == "purple")
-        return QColor(170, 110, 220);
-    QColor qc(c);
-    return qc.isValid() ? qc : QColor(220, 70, 70);
-}
-static QVector<PlaylistKeywordRule> playlistKeywordRules()
-{
-    static QVector<PlaylistKeywordRule> rules;
-    static qint64 lastMtime = -2;
-    QString path = playlistKeywordConfigPath();
-    QFileInfo info(path);
-    if (!info.exists()) {
-        QFile f(path);
-        if (f.open(QIODevice::WriteOnly | QIODevice::Text)) {
-            QTextStream out(&f);
-            out << "# mpvjoc playlist keyword colors\n";
-            out << "# One rule per line: keyword=color\n";
-            out << "# Colors can be red, green, orange, blue, lila/purple, or #RRGGBB\n";
-            out << "# Examples:\n";
-            out << "# sample=red\n";
-            out << "# complete=green\n";
-        }
-        info.refresh();
-    }
-    qint64 mt = info.exists() ? info.lastModified().toMSecsSinceEpoch() : -1;
-    if (mt == lastMtime)
-        return rules;
-    lastMtime = mt;
-    rules.clear();
-    QFile f(path);
-    if (f.open(QIODevice::ReadOnly | QIODevice::Text)) {
-        while (!f.atEnd()) {
-            QString line = QString::fromUtf8(f.readLine()).trimmed();
-            if (line.isEmpty() || line.startsWith('#'))
-                continue;
-            int eq = line.indexOf('=');
-            if (eq <= 0)
-                continue;
-            QString key = line.left(eq).trimmed();
-            QString col = line.mid(eq + 1).trimmed();
-            if (!key.isEmpty())
-                rules.push_back({ key, playlistKeywordColor(col) });
-        }
-    }
-    return rules;
-}
-static void drawPlaylistHighlightedTitle(QPainter* p, const QRect& rect, const QString& title)
-{
-    QString text = p->fontMetrics().elidedText(title, Qt::ElideRight, rect.width());
-    QVector<QColor> colors(text.size());
-    QRegularExpression dateRe(QStringLiteral("(?:^|[^0-9])((?:\\d{4}|\\d{2})[.-]\\d{2}[.-]\\d{2})(?!\\d)"));
-    auto it = dateRe.globalMatch(text);
-    while (it.hasNext()) {
-        auto m = it.next();
-        int a = m.capturedStart(1), b = m.capturedLength(1);
-        for (int n = a; n < a + b && n < colors.size(); ++n)
-            colors[n] = QColor(255, 150, 40);
-    }
-    for (const auto& r : playlistKeywordRules()) {
-        int pos = 0;
-        while (!r.keyword.isEmpty() && (pos = text.indexOf(r.keyword, pos, Qt::CaseInsensitive)) >= 0) {
-            for (int n = pos; n < pos + r.keyword.size() && n < colors.size(); ++n)
-                if (!colors[n].isValid())
-                    colors[n] = r.color;
-            pos += qMax(1, r.keyword.size());
-        }
-    }
-    p->save();
-    p->setClipRect(rect);
-    int x = rect.left();
-    int baseY = rect.top() + (rect.height() + p->fontMetrics().ascent() - p->fontMetrics().descent()) / 2;
-    int pos = 0;
-    while (pos < text.size()) {
-        QColor c = colors[pos].isValid() ? colors[pos] : QColor(Qt::white);
-        int end = pos + 1;
-        while (end < text.size() && ((colors[end].isValid() ? colors[end] : QColor(Qt::white)) == c))
-            ++end;
-        QString part = text.mid(pos, end - pos);
-        p->setPen(c);
-        p->drawText(x, baseY, part);
-        x += p->fontMetrics().horizontalAdvance(part);
-        pos = end;
-    }
-    p->restore();
-}
 
 static bool gPlaylistSizeDisplayGB = false;
 bool PlaylistDelegate::editorEvent(
@@ -205,7 +96,7 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
         heightColor = resolutionBadgeColor(vh);
     }
     QRect titleRect(x, r.top() + 7, r.width() - x + r.left() - 90, 20);
-    drawPlaylistHighlightedTitle(p, titleRect, title);
+    drawHighlightedTitle(p, titleRect, title);
     QRect durationRect(r.right() - 86, r.top() + 7, 78, 20);
     const DuplicateDurationRunInfo duplicateRun = duplicateDurationRunInfo(i, dk, dur);
     if (duplicateRun.isDuplicate) {
