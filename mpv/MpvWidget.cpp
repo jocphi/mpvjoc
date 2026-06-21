@@ -115,7 +115,7 @@ void MpvWidget::toggleInfoOverlay(){
 void MpvWidget::showScaleOverlay(){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
-    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(false,overlayScaleText(),overlayDimensionsText(),false,infoOverlayPinned);
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(infoOverlayPinned?playbackPaused:false,overlayScaleText(),overlayDimensionsText(),infoOverlayPinned,infoOverlayPinned);
 }
 void MpvWidget::showVolumeOverlay(double volume,bool muted){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
@@ -125,6 +125,7 @@ void MpvWidget::showVolumeOverlay(double volume,bool muted){
     if(infoOverlayPinned)QTimer::singleShot(750,this,[this]{if(infoOverlayPinned)showScaleOverlay();});
 }
 void MpvWidget::showPlaybackOverlay(bool paused){
+    playbackPaused=paused;
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
     static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(paused,overlayScaleText(),overlayDimensionsText(),true,false);

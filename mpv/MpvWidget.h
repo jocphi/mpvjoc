@@ -46,6 +46,7 @@ private:
     QString cur;
     QWidget* playbackOverlay=nullptr;
     bool infoOverlayPinned=false;
+    bool playbackPaused=false;
     qint64 videoDisplayWidth=0;
     qint64 videoDisplayHeight=0;
     double maxVideoScale=1.0;
