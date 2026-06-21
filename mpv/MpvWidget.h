@@ -5,6 +5,7 @@ struct mpv_handle;
 struct mpv_render_context;
 struct mpv_event_property;
 
+class QWidget;
 class MpvWidget: public QOpenGLWidget{
 public:
     explicit MpvWidget(QWidget*p=nullptr);
@@ -24,6 +25,7 @@ public:
     void seekAbsolute(double s);
     void seekRelative(double s);
     void setMaxVideoScale(double scale);
+    void showPlaybackOverlay(bool paused);
 protected:
     void initializeGL()override;
     void paintGL()override;
@@ -36,4 +38,5 @@ private:
     mpv_handle*mpv=nullptr;
     mpv_render_context*ctx=nullptr;
     QString cur;
+    QWidget* playbackOverlay=nullptr;
 };

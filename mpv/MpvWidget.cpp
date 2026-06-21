@@ -8,6 +8,64 @@
 #include <mpv/client.h>
 #include <mpv/render.h>
 #include <mpv/render_gl.h>
+#include <QWidget>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QTimer>
+#include <QPolygonF>
+#include <QtGlobal>
+
+
+namespace {
+class PlaybackOverlayWidget : public QWidget {
+public:
+    explicit PlaybackOverlayWidget(QWidget* parent=nullptr):QWidget(parent){
+        setAttribute(Qt::WA_TransparentForMouseEvents,true);
+        setAttribute(Qt::WA_TranslucentBackground,true);
+        hide();
+    }
+    void showOverlay(bool paused){
+        pauseIcon=paused;
+        int g=++generation;
+        show();
+        raise();
+        update();
+        QTimer::singleShot(700,this,[this,g]{ if(g==generation)hide(); });
+    }
+protected:
+    void paintEvent(QPaintEvent*)override{
+        QPainter p(this);
+        p.setRenderHint(QPainter::Antialiasing,true);
+        int icon=qBound(64,qMin(width(),height())/5,150);
+        QPointF c(width()/2.0,height()/2.0);
+        qreal bg=icon*1.35;
+        QRectF bgRect(c.x()-bg/2.0,c.y()-bg/2.0,bg,bg);
+        p.setPen(Qt::NoPen);
+        p.setBrush(QColor(0,0,0,145));
+        p.drawRoundedRect(bgRect,bg*0.18,bg*0.18);
+        p.setBrush(QColor(255,255,255,235));
+        if(pauseIcon){
+            qreal bw=icon*0.22,bh=icon*0.72,gap=icon*0.18;
+            qreal top=c.y()-bh/2.0,lx=c.x()-gap/2.0-bw,rx=c.x()+gap/2.0;
+            p.drawRoundedRect(QRectF(lx,top,bw,bh),bw*0.28,bw*0.28);
+            p.drawRoundedRect(QRectF(rx,top,bw,bh),bw*0.28,bw*0.28);
+        }else{
+            QPolygonF tri;
+            tri<<QPointF(c.x()-icon*0.24,c.y()-icon*0.36)<<QPointF(c.x()-icon*0.24,c.y()+icon*0.36)<<QPointF(c.x()+icon*0.38,c.y());
+            p.drawPolygon(tri);
+        }
+    }
+private:
+    bool pauseIcon=false;
+    int generation=0;
+};
+}
+
+void MpvWidget::showPlaybackOverlay(bool paused){
+    if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
+    playbackOverlay->setGeometry(rect());
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showOverlay(paused);
+}
 
 MpvWidget::MpvWidget(QWidget*p):QOpenGLWidget(p){forceCLocaleForMpv();setMinimumSize(640,360);setFocusPolicy(Qt::StrongFocus); mpv=mpv_create(); if(!mpv)qFatal("no mpv"); check_mpv_error(mpv_set_option_string(mpv,"terminal","yes")); check_mpv_error(mpv_set_option_string(mpv,"msg-level","all=warn,libmpv_render=fatal")); check_mpv_error(mpv_set_option_string(mpv,"hwdec","auto-safe")); check_mpv_error(mpv_set_option_string(mpv,"video-unscaled","downscale-big")); check_mpv_error(mpv_set_option_string(mpv,"vo","libmpv")); check_mpv_error(mpv_set_option_string(mpv,"input-default-bindings","no")); check_mpv_error(mpv_set_option_string(mpv,"osc","no")); check_mpv_error(mpv_initialize(mpv)); mpv_observe_property(mpv,1,"time-pos",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,2,"duration",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,3,"pause",MPV_FORMAT_FLAG); mpv_observe_property(mpv,4,"path",MPV_FORMAT_STRING); mpv_observe_property(mpv,5,"volume",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,6,"mute",MPV_FORMAT_FLAG); mpv_set_wakeup_callback(mpv,wakeup,this);} 
 MpvWidget::~MpvWidget(){makeCurrent(); if(ctx)mpv_render_context_free(ctx); doneCurrent(); if(mpv)mpv_terminate_destroy(mpv);} 
