@@ -1,11 +1,13 @@
 #pragma once
 #include <QOpenGLWidget>
 #include <functional>
+#include <QtGlobal>
 struct mpv_handle;
 struct mpv_render_context;
 struct mpv_event_property;
 
 class QWidget;
+class QResizeEvent;
 class MpvWidget: public QOpenGLWidget{
 public:
     explicit MpvWidget(QWidget*p=nullptr);
@@ -29,6 +31,7 @@ public:
 protected:
     void initializeGL()override;
     void paintGL()override;
+    void resizeEvent(QResizeEvent*e)override;
 private:
     static void*getProc(void*,const char*n);
     static void render(void*o);
@@ -39,4 +42,7 @@ private:
     mpv_render_context*ctx=nullptr;
     QString cur;
     QWidget* playbackOverlay=nullptr;
+    qint64 videoDisplayWidth=0;
+    qint64 videoDisplayHeight=0;
+    double maxVideoScale=1.0;
 };
