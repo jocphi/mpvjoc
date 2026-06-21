@@ -1,0 +1,13 @@
+{
+  "prettier": {
+    "allowed": true
+  },
+  "colorize_brackets": true,
+  "indent_guides": {
+    "coloring": "indent_aware",
+    "background_coloring": "indent_aware",
+    "enabled": true
+  },
+  "preferred_line_length": 100,
+  "hard_tabs": true
+}

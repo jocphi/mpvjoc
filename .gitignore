@@ -1,0 +1,54 @@
+# Build directories
+build/
+cmake-build-*/
+CMakeFiles/
+CMakeCache.txt
+cmake_install.cmake
+Makefile
+compile_commands.json
+
+# Qt Creator / IDE files
+*.user
+*.user.*
+*.autosave
+
+# Generated binaries
+mpvjoc
+*.o
+*.obj
+*.a
+*.so
+*.dll
+*.dylib
+*.exe
+
+# Patch/backups
+*.bak
+*.orig
+*.rej
+*.tmp
+*.old
+backup/
+backups/
+*.backup
+
+# Logs
+*.log
+
+# Local runtime/state/config files
+*.local
+.env
+.env.*
+
+# Media files - avoid accidentally committing test videos
+*.mkv
+*.mp4
+*.avi
+*.mov
+*.webm
+*.mp3
+*.flac
+*.wav
+*.opus
+*.srt
+*.ass

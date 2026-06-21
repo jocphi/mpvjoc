@@ -1,0 +1,24 @@
+#include "TimelineWidget.h"
+#include "util/Utils.h"
+#include <QPainter>
+#include <QMouseEvent>
+#include <QtGlobal>
+#include <QRegularExpression>
+#include <QStandardPaths>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTextStream>
+
+struct TimelineKeywordRule{QString keyword; QColor color;};
+static QString timelineKeywordConfigPath(){QString d=QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation); if(d.isEmpty())d=QDir::homePath()+"/.config/mpvjoc"; QDir().mkpath(d); return QDir(d).filePath("playlist-keywords.conf");}
+static QColor timelineKeywordColor(QString c){c=c.trimmed(); QString lc=c.toLower(); if(lc=="red")return QColor(220,70,70); if(lc=="green")return QColor(70,180,95); if(lc=="orange")return QColor(255,150,40); if(lc=="blue")return QColor(80,140,220); if(lc=="lila"||lc=="purple")return QColor(170,110,220); QColor qc(c); return qc.isValid()?qc:QColor(220,70,70);}
+static QVector<TimelineKeywordRule> timelineKeywordRules(){static QVector<TimelineKeywordRule> rules; static qint64 lastMtime=-2; QString path=timelineKeywordConfigPath(); QFileInfo info(path); if(!info.exists()){QFile f(path); if(f.open(QIODevice::WriteOnly|QIODevice::Text)){QTextStream out(&f); out<<"# mpvjoc playlist keyword colors\n"; out<<"# One rule per line: keyword=color\n"; out<<"# Colors can be red, green, orange, blue, lila/purple, or #RRGGBB\n"; out<<"# Examples:\n"; out<<"# sample=red\n"; out<<"# complete=green\n";} info.refresh();}
+ qint64 mt=info.exists()?info.lastModified().toMSecsSinceEpoch():-1; if(mt==lastMtime)return rules; lastMtime=mt; rules.clear(); QFile f(path); if(f.open(QIODevice::ReadOnly|QIODevice::Text)){while(!f.atEnd()){QString line=QString::fromUtf8(f.readLine()).trimmed(); if(line.isEmpty()||line.startsWith('#'))continue; int eq=line.indexOf('='); if(eq<=0)continue; QString key=line.left(eq).trimmed(); QString col=line.mid(eq+1).trimmed(); if(!key.isEmpty())rules.push_back({key,timelineKeywordColor(col)});}} return rules;}
+static void drawTimelineHighlightedTitle(QPainter*p,const QRect&rect,const QString&title){QString text=p->fontMetrics().elidedText(title,Qt::ElideRight,rect.width()); QVector<QColor> colors(text.size()); QRegularExpression dateRe(QStringLiteral("(?:^|[^0-9])((?:\\d{4}|\\d{2})[.-]\\d{2}[.-]\\d{2})(?!\\d)")); auto it=dateRe.globalMatch(text); while(it.hasNext()){auto m=it.next(); int a=m.capturedStart(1), b=m.capturedLength(1); for(int n=a;n<a+b&&n<colors.size();++n)colors[n]=QColor(255,150,40);} for(const auto&r:timelineKeywordRules()){int pos=0; while(!r.keyword.isEmpty()&&(pos=text.indexOf(r.keyword,pos,Qt::CaseInsensitive))>=0){for(int n=pos;n<pos+r.keyword.size()&&n<colors.size();++n)if(!colors[n].isValid())colors[n]=r.color; pos+=qMax(1,r.keyword.size());}} p->save(); p->setClipRect(rect); int x=rect.left(); int baseY=rect.top()+(rect.height()+p->fontMetrics().ascent()-p->fontMetrics().descent())/2; int pos=0; while(pos<text.size()){QColor c=colors[pos].isValid()?colors[pos]:QColor(Qt::white); int end=pos+1; while(end<text.size()&&((colors[end].isValid()?colors[end]:QColor(Qt::white))==c))++end; QString part=text.mid(pos,end-pos); p->setPen(c); p->drawText(x,baseY,part); x+=p->fontMetrics().horizontalAdvance(part); pos=end;} p->restore();}
+
+TimelineWidget::TimelineWidget(QWidget*p):QWidget(p){setMinimumHeight(38);setMouseTracking(true);} 
+void TimelineWidget::setPosition(double s){if(!drag){pos=qMax(0.0,s);update();}} void TimelineWidget::setDuration(double s){dur=qMax(0.0,s);update();} void TimelineWidget::setTitle(const QString&t){title=t;update();}
+void TimelineWidget::paintEvent(QPaintEvent*){QPainter p(this);p.fillRect(rect(),QColor(16,16,16)); QRect bar(8,5,qMax(1,width()-16),7); p.fillRect(bar,QColor(16,48,16)); double ep=drag?prev:pos; QRect fill=bar; fill.setWidth(int(bar.width()*(dur>0?qBound(0.0,ep/dur,1.0):0))); p.fillRect(fill,QColor(0,204,51)); QString timeText=formatHMS(ep)+" / "+formatHMS(dur); int timeW=p.fontMetrics().horizontalAdvance(timeText)+14; QRect timeRect(8,18,timeW,18); p.setPen(QColor(0,204,51)); p.drawText(timeRect,Qt::AlignLeft|Qt::AlignVCenter,timeText); p.setPen(Qt::white); int titleX=timeRect.right()+8; drawTimelineHighlightedTitle(&p,QRect(titleX,18,qMax(1,width()-titleX-8),18),title.isEmpty()?"No file loaded":title);}
+void TimelineWidget::mousePressEvent(QMouseEvent*e){if(e->button()==Qt::LeftButton){drag=true;upd(e->position().x());if(previewPositionChanged)previewPositionChanged(prev);update();}} void TimelineWidget::mouseMoveEvent(QMouseEvent*e){if(drag){upd(e->position().x());if(previewPositionChanged)previewPositionChanged(prev);update();}} void TimelineWidget::mouseReleaseEvent(QMouseEvent*e){if(drag&&e->button()==Qt::LeftButton){upd(e->position().x());drag=false;pos=prev;if(seekRequested)seekRequested(pos);update();}}
+void TimelineWidget::upd(double x){prev=dur*qBound(0.0,(x-8)/qMax(1,width()-16),1.0);}
