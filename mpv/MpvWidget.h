@@ -2,6 +2,7 @@
 #include <QOpenGLWidget>
 #include <functional>
 #include <QtGlobal>
+#include <QSize>
 struct mpv_handle;
 struct mpv_render_context;
 struct mpv_event_property;
@@ -20,12 +21,17 @@ public:
     void stopPlayback();
     QString currentFilePath()const;
     void togglePause();
+    void setPause(bool paused);
     void toggleMute();
     void changeVolume(double d);
     void setVolume(double v);
     void setMute(bool m);
     void seekAbsolute(double s);
     void seekRelative(double s);
+    void frameStepForward();
+    void frameStepBackward();
+    void seekAbsoluteKeyframe(double s);
+    void seekRelativeKeyframe(double s);
     void setMaxVideoScale(double scale);
     void setCropVideoToScale(bool crop);
     void showPlaybackOverlay(bool paused);
@@ -56,4 +62,5 @@ private:
     void applyVideoScale();
     QString overlayScaleText()const;
     QString overlayDimensionsText()const;
+    QSize overlayRenderedVideoSize()const;
 };

@@ -232,6 +232,11 @@ void MpvWidget::setCropVideoToScale(bool crop){
     applyVideoScale();
     if(infoOverlayPinned)showScaleOverlay();
 }
+void MpvWidget::setPause(bool paused){const char*cmd[]={"set","pause",paused?"yes":"no",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));}
+void MpvWidget::frameStepForward(){const char*cmd[]={"frame-step",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));}
+void MpvWidget::frameStepBackward(){const char*cmd[]={"frame-back-step",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));}
+void MpvWidget::seekAbsoluteKeyframe(double s){QByteArray b=QByteArray::number(s,'f',3); const char*cmd[]={"seek",b.constData(),"absolute","keyframes",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));}
+void MpvWidget::seekRelativeKeyframe(double s){QByteArray b=QByteArray::number(s,'f',3); const char*cmd[]={"seek",b.constData(),"relative","keyframes",nullptr};check_mpv_error(mpv_command_async(mpv,0,cmd));}
 void MpvWidget::setMaxVideoScale(double scale){ double clamped=qBound(0.5,scale,2.0); maxVideoScale=clamped; applyVideoScale();}
 void MpvWidget::resizeEvent(QResizeEvent*e){QOpenGLWidget::resizeEvent(e); applyVideoScale(); if(playbackOverlay)playbackOverlay->setGeometry(rect());}
 void MpvWidget::initializeGL(){mpv_opengl_init_params gl{getProc,nullptr}; mpv_render_param ps[]={{MPV_RENDER_PARAM_API_TYPE,const_cast<char*>(MPV_RENDER_API_TYPE_OPENGL)},{MPV_RENDER_PARAM_OPENGL_INIT_PARAMS,&gl},{MPV_RENDER_PARAM_INVALID,nullptr}}; check_mpv_error(mpv_render_context_create(&ctx,mpv,ps)); mpv_render_context_set_update_callback(ctx,render,this);} 
