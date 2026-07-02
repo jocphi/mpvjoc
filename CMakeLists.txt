@@ -27,6 +27,7 @@ add_executable(mpvjoc
     ui/MainWindowShortcuts.cpp
     ui/MainWindowDrops.cpp
     ui/MainWindowState.cpp
+    ui/MainWindowPlaylist.cpp
 )
 
 target_include_directories(mpvjoc PRIVATE
