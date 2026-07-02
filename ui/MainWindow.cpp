@@ -103,7 +103,7 @@ void MainWindow::replacePlaylistWithDroppedPaths(const QStringList&paths){
     savePlaylistState();
 }
 bool MainWindow::eventFilter(QObject*o,QEvent*ev){bool video=o==mpvWidget; bool list=o==playlistView->viewport(); if((video||list)&&(ev->type()==QEvent::DragEnter||ev->type()==QEvent::DragMove||ev->type()==QEvent::Drop)){auto urls=[&](const QMimeData*m){QStringList f; if(!m)return f; for(auto u:m->urls())if(u.isLocalFile())f<<u.toLocalFile(); return f;}; if(ev->type()==QEvent::DragEnter){auto*e=static_cast<QDragEnterEvent*>(ev); if(e->mimeData()->hasUrls()){e->acceptProposedAction();return true;}} if(ev->type()==QEvent::DragMove){auto*e=static_cast<QDragMoveEvent*>(ev); if(e->mimeData()->hasUrls()){e->acceptProposedAction();return true;}} if(ev->type()==QEvent::Drop){auto*e=static_cast<QDropEvent*>(ev); QStringList f=urls(e->mimeData()); if(!f.isEmpty()){if(video)replacePlaylistWithDroppedPaths(f); else addDroppedPaths(f); e->acceptProposedAction();return true;}}} return QMainWindow::eventFilter(o,ev);} void MainWindow::closeEvent(QCloseEvent*e){savePlaylistState();QMainWindow::closeEvent(e);} void MainWindow::dragEnterEvent(QDragEnterEvent*e){if(e->mimeData()->hasUrls())e->acceptProposedAction();} void MainWindow::dropEvent(QDropEvent*e){QStringList f; for(auto u:e->mimeData()->urls())if(u.isLocalFile())f<<u.toLocalFile(); replacePlaylistWithDroppedPaths(f); e->acceptProposedAction();}
-void MainWindow::keyPressEvent(QKeyEvent*e){auto mods=e->modifiers(); int k=e->key(); if(e->isAutoRepeat()&&(k==Qt::Key_PageDown||k==Qt::Key_PageUp)){e->accept();return;} int moveShortcut=-1; if((mods&Qt::ShiftModifier)&&k>=Qt::Key_1&&k<=Qt::Key_6)moveShortcut=k-Qt::Key_1; else if(k==Qt::Key_Exclam)moveShortcut=0; else if(k==Qt::Key_QuoteDbl)moveShortcut=1; else if(k==Qt::Key_NumberSign)moveShortcut=2; else if(k==Qt::Key_currency)moveShortcut=3; else if(k==Qt::Key_Percent)moveShortcut=4; else if(k==Qt::Key_Ampersand)moveShortcut=5; if(moveShortcut>=0){moveSelectedFileToTarget(moveShortcut);e->accept();return;} if(k==Qt::Key_F1){mpvWidget->toggleInfoOverlay();e->accept();return;} bool plainScaleShortcut=((mods&~Qt::KeypadModifier)==Qt::NoModifier); if(plainScaleShortcut&&k==Qt::Key_0){setCropVideoToScale(!cropVideoToScale);e->accept();return;} if(plainScaleShortcut&&e->text()==QString::fromUtf8("½")){setMaxVideoScale(0.5);e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_1){setMaxVideoScale(1.0);e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_2){setMaxVideoScale(2.0);e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_F){mpvWidget->frameStepForward();e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_D){mpvWidget->frameStepBackward();e->accept();return;} if(k==Qt::Key_P&&(mods&Qt::ControlModifier)){toggleWarpPlaybackMode();e->accept();return;} if(k==Qt::Key_P){ if(warpPlaybackMode){toggleWarpPlaybackMode();e->accept();return;} if(playlistView->hasFocus())playPlaylistRow(currentRow()); else playPauseOrStartSelected(); e->accept();return;} if(k==Qt::Key_Return||k==Qt::Key_Enter){playPlaylistRow(currentRow());e->accept();return;} if(k==Qt::Key_Delete&&(mods&Qt::ControlModifier)){clearPlaylist();e->accept();return;} if(k==Qt::Key_Delete&&(mods&Qt::ShiftModifier)){moveSelectedFileToTrash();e->accept();return;} if(k==Qt::Key_Delete){removeSelectedItem();e->accept();return;} if(k==Qt::Key_Up&&(mods&Qt::AltModifier)){moveSelectedItemUp();e->accept();return;} if(k==Qt::Key_Down&&(mods&Qt::AltModifier)){moveSelectedItemDown();e->accept();return;} if(warpPlaybackMode&&k==Qt::Key_Right){setWarpFactor(warpFactor+1);e->accept();return;} if(warpPlaybackMode&&k==Qt::Key_Left){setWarpFactor(warpFactor-1);e->accept();return;} if(k==Qt::Key_PageDown){playNextPlaylistFile();e->accept();return;} if(k==Qt::Key_PageUp){playPreviousPlaylistFile();e->accept();return;} if(k==Qt::Key_Period&&(mods&Qt::ControlModifier)){mpvWidget->seekRelative(10);e->accept();return;} if(k==Qt::Key_Comma&&(mods&Qt::ControlModifier)){mpvWidget->seekRelative(-10);e->accept();return;} if(k==Qt::Key_Period){mpvWidget->seekRelative(60);e->accept();return;} if(k==Qt::Key_Comma){mpvWidget->seekRelative(-60);e->accept();return;} if(k==Qt::Key_Colon){mpvWidget->seekRelative(30);e->accept();return;} if(k==Qt::Key_Semicolon){mpvWidget->seekRelative(-30);e->accept();return;} if(k==Qt::Key_M){mpvWidget->toggleMute();e->accept();return;} if(k==Qt::Key_Plus){mpvWidget->changeVolume(5);e->accept();return;} if(k==Qt::Key_Minus){mpvWidget->changeVolume(-5);e->accept();return;} if(k==Qt::Key_O&&(mods&Qt::ControlModifier)){openFiles();e->accept();return;} if(k==Qt::Key_F4){closeCurrentFile();e->accept();return;} if(k==Qt::Key_F5){playlistModel->resetThumbnailAttempts();probeMissingMetadata();generateMissingThumbnails();e->accept();return;} QMainWindow::keyPressEvent(e);}
+void MainWindow::keyPressEvent(QKeyEvent*e){auto mods=e->modifiers(); int k=e->key(); if(e->isAutoRepeat()&&(k==Qt::Key_PageDown||k==Qt::Key_PageUp)){e->accept();return;} int moveShortcut=-1; if((mods&Qt::ShiftModifier)&&k>=Qt::Key_1&&k<=Qt::Key_6)moveShortcut=k-Qt::Key_1; else if(k==Qt::Key_Exclam)moveShortcut=0; else if(k==Qt::Key_QuoteDbl)moveShortcut=1; else if(k==Qt::Key_NumberSign)moveShortcut=2; else if(k==Qt::Key_currency)moveShortcut=3; else if(k==Qt::Key_Percent)moveShortcut=4; else if(k==Qt::Key_Ampersand)moveShortcut=5; if(moveShortcut>=0){moveSelectedFileToTarget(moveShortcut);e->accept();return;} if(k==Qt::Key_Escape&&shortcutHelpOverlay&&shortcutHelpOverlay->isVisible()){shortcutHelpOverlay->hide();e->accept();return;} if(k==Qt::Key_F12){toggleShortcutHelpOverlay();e->accept();return;} if(k==Qt::Key_F1){mpvWidget->toggleInfoOverlay();e->accept();return;} bool plainScaleShortcut=((mods&~Qt::KeypadModifier)==Qt::NoModifier); if(plainScaleShortcut&&k==Qt::Key_0){setCropVideoToScale(!cropVideoToScale);e->accept();return;} if(plainScaleShortcut&&e->text()==QString::fromUtf8("½")){setMaxVideoScale(0.5);e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_1){setMaxVideoScale(1.0);e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_2){setMaxVideoScale(2.0);e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_F){mpvWidget->frameStepForward();e->accept();return;} if(plainScaleShortcut&&k==Qt::Key_D){mpvWidget->frameStepBackward();e->accept();return;} if(k==Qt::Key_P&&(mods&Qt::ControlModifier)){toggleWarpPlaybackMode();e->accept();return;} if(k==Qt::Key_P){ if(warpPlaybackMode){toggleWarpPlaybackMode();e->accept();return;} if(playlistView->hasFocus())playPlaylistRow(currentRow()); else playPauseOrStartSelected(); e->accept();return;} if(k==Qt::Key_Return||k==Qt::Key_Enter){playPlaylistRow(currentRow());e->accept();return;} if(k==Qt::Key_Delete&&(mods&Qt::ControlModifier)){clearPlaylist();e->accept();return;} if(k==Qt::Key_Delete&&(mods&Qt::ShiftModifier)){moveSelectedFileToTrash();e->accept();return;} if(k==Qt::Key_Delete){removeSelectedItem();e->accept();return;} if(k==Qt::Key_Up&&(mods&Qt::AltModifier)){moveSelectedItemUp();e->accept();return;} if(k==Qt::Key_Down&&(mods&Qt::AltModifier)){moveSelectedItemDown();e->accept();return;} if(warpPlaybackMode&&k==Qt::Key_Right){setWarpFactor(warpFactor+1);e->accept();return;} if(warpPlaybackMode&&k==Qt::Key_Left){setWarpFactor(warpFactor-1);e->accept();return;} if(k==Qt::Key_PageDown){playNextPlaylistFile();e->accept();return;} if(k==Qt::Key_PageUp){playPreviousPlaylistFile();e->accept();return;} if(k==Qt::Key_Period&&(mods&Qt::ControlModifier)){mpvWidget->seekRelative(10);e->accept();return;} if(k==Qt::Key_Comma&&(mods&Qt::ControlModifier)){mpvWidget->seekRelative(-10);e->accept();return;} if(k==Qt::Key_Period){mpvWidget->seekRelative(60);e->accept();return;} if(k==Qt::Key_Comma){mpvWidget->seekRelative(-60);e->accept();return;} if(k==Qt::Key_Colon){mpvWidget->seekRelative(30);e->accept();return;} if(k==Qt::Key_Semicolon){mpvWidget->seekRelative(-30);e->accept();return;} if(k==Qt::Key_M){mpvWidget->toggleMute();e->accept();return;} if(k==Qt::Key_Plus){mpvWidget->changeVolume(5);e->accept();return;} if(k==Qt::Key_Minus){mpvWidget->changeVolume(-5);e->accept();return;} if(k==Qt::Key_O&&(mods&Qt::ControlModifier)){openFiles();e->accept();return;} if(k==Qt::Key_F4){closeCurrentFile();e->accept();return;} if(k==Qt::Key_F5){playlistModel->resetThumbnailAttempts();probeMissingMetadata();generateMissingThumbnails();e->accept();return;} QMainWindow::keyPressEvent(e);}
 QString MainWindow::stateFilePath()const{QString d=QStandardPaths::writableLocation(QStandardPaths::AppConfigLocation); if(d.isEmpty())d=QDir::homePath()+"/.config/mpvjoc"; QDir().mkpath(d); return QDir(d).filePath("playlist-state.json");}
 void MainWindow::updatePlaylistSummary(){if(!playlistSummaryLabel||!playlistModel)return;qint64 totalBytes=0;double totalDuration=0;for(int r=0;r<playlistModel->count();++r){QModelIndex idx=playlistModel->index(r,0);totalBytes+=idx.data(PlaylistModel::SizeRole).toLongLong();if(idx.data(PlaylistModel::DurationKnownRole).toBool())totalDuration+=idx.data(PlaylistModel::DurationRole).toDouble();}playlistSummaryLabel->setText(QString("%1 files  •  %2  •  %3").arg(playlistModel->count()).arg(formatBytes(totalBytes)).arg(formatHMS(totalDuration)));}
 void MainWindow::updateMuteVolumeButton(){ if(!muteButton)return; muteButton->setText(QString("Vol %1%").arg(int(currentVolume+0.5))); QFont f=muteButton->font(); f.setStrikeOut(currentMuted); muteButton->setFont(f); muteButton->setToolTip(currentMuted?"Muted - click to unmute":"Click to mute"); }
@@ -120,6 +120,68 @@ bool MainWindow::moveFileToDirectory(const QString&src,const QString&targetDir,Q
 double MainWindow::normalizedMaxVideoScale(double scale)const{ if(scale<0.75)return 0.5; if(scale<1.5)return 1.0; return 2.0;}
 void MainWindow::updateScaleButtons(){ auto apply=[this](QPushButton*b,bool active){ if(!b)return; QFont f=b->font(); f.setStrikeOut(!active); b->setFont(f); b->setEnabled(true); }; apply(scaleHalfButton,maxVideoScale==0.5); apply(scaleOneButton,maxVideoScale==1.0); apply(scaleTwoButton,maxVideoScale==2.0); updateCropButton();}
 void MainWindow::updateCropButton(){if(!cropButton)return;cropButton->setText(cropVideoToScale?"clip":"scale");cropButton->setToolTip(cropVideoToScale?"Clip enabled: exact scale may clip video":"Scale enabled: scale down only when needed to show full video");}
+void MainWindow::toggleShortcutHelpOverlay(){
+    if(shortcutHelpOverlay&&shortcutHelpOverlay->isVisible()){
+        shortcutHelpOverlay->hide();
+        return;
+    }
+    if(!shortcutHelpOverlay){
+        shortcutHelpOverlay=new QLabel(this);
+        shortcutHelpOverlay->setTextFormat(Qt::PlainText);
+        shortcutHelpOverlay->setWordWrap(false);
+        shortcutHelpOverlay->setAlignment(Qt::AlignLeft|Qt::AlignTop);
+        shortcutHelpOverlay->setAttribute(Qt::WA_StyledBackground,true);
+        QFont f=shortcutHelpOverlay->font();
+        f.setFamily(QStringLiteral("monospace"));
+        f.setPointSize(10);
+        shortcutHelpOverlay->setFont(f);
+        shortcutHelpOverlay->setStyleSheet(QStringLiteral(
+            "QLabel{background:rgba(0,0,0,215);color:#eeeeee;border:2px solid #66ccff;border-radius:8px;padding:14px;}"));
+        shortcutHelpOverlay->setText(QStringLiteral(
+            "Keyboard shortcuts\n"
+            "\n"
+            "Playback\n"
+            "  P          Play/Pause, or leave Warp mode if active\n"
+            "  Ctrl+P     Toggle Warp mode\n"
+            "  Left/Right Change Warp factor while Warp mode is active\n"
+            "  F          Next frame\n"
+            "  D          Previous frame\n"
+            "  M          Toggle mute\n"
+            "  + / -      Volume up/down\n"
+            "\n"
+            "Scale / display\n"
+            "  1/2        Set scale to 50% with the 1/2 key\n"
+            "  1          Set scale to 100%\n"
+            "  2          Set scale to 200%\n"
+            "  0          Toggle clip/scale\n"
+            "  F1         Toggle persistent info overlay\n"
+            "  F12        Show/hide this help\n"
+            "  Esc        Hide this help\n"
+            "\n"
+            "Playlist\n"
+            "  Enter      Play selected\n"
+            "  PageDown   Next item\n"
+            "  PageUp     Previous item\n"
+            "  Delete     Remove from playlist\n"
+            "  Shift+Del  Move file to trash\n"
+            "  Ctrl+Del   Clear playlist\n"
+            "  Alt+Up     Move selected item up\n"
+            "  Alt+Down   Move selected item down\n"
+            "\n"
+            "Seeking\n"
+            "  .          Forward 60 seconds\n"
+            "  ,          Back 60 seconds\n"
+            "  Ctrl+.     Forward 10 seconds\n"
+            "  Ctrl+,     Back 10 seconds\n"
+            "  :          Forward 30 seconds\n"
+            "  ;          Back 30 seconds"));
+    }
+    const int w=qMin(width()-40,620);
+    const int h=qMin(height()-40,520);
+    shortcutHelpOverlay->setGeometry((width()-w)/2,(height()-h)/2,w,h);
+    shortcutHelpOverlay->show();
+    shortcutHelpOverlay->raise();
+}
 void MainWindow::setCropVideoToScale(bool crop){cropVideoToScale=crop;if(mpvWidget){mpvWidget->setCropVideoToScale(cropVideoToScale);mpvWidget->showScaleOverlay();}updateCropButton();if(!restoringPlaybackState)savePlaylistState();}
 void MainWindow::setMaxVideoScale(double scale){ maxVideoScale=normalizedMaxVideoScale(scale); if(mpvWidget){mpvWidget->setMaxVideoScale(maxVideoScale);mpvWidget->showScaleOverlay();} updateScaleButtons(); if(!restoringPlaybackState)savePlaylistState();}
 void MainWindow::appendMoveLog(const QString&src,const QString&dest,const QString&buttonName){QFile f(moveLogFilePath()); if(f.open(QIODevice::Append|QIODevice::Text)){QTextStream s(&f); s<<QDateTime::currentDateTime().toString(Qt::ISODate)<<"\t"<<buttonName<<"\t"<<src<<"\t"<<dest<<"\n";} refreshMoveLogView();}
