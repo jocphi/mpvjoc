@@ -57,10 +57,30 @@ def format_lines(lines: list[int]) -> str:
     suffix = "" if len(lines) <= 8 else f", +{len(lines) - 8} more"
     return ", ".join(str(x) for x in shown) + suffix
 
+
+
+def compact_context(text: str, key: str, radius: int) -> str:
+    if radius <= 0:
+        return ""
+    needle = "Qt::" + key
+    pos = text.find(needle)
+    if pos < 0:
+        return ""
+    start = max(0, pos - radius)
+    end = min(len(text), pos + len(needle) + radius)
+    snippet = text[start:end].replace(chr(10), " ").replace(chr(9), " ")
+    snippet = " ".join(snippet.split())
+    if start > 0:
+        snippet = "..." + snippet
+    if end < len(text):
+        snippet = snippet + "..."
+    return snippet
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Audit Qt shortcut keys against F12 help text.")
     parser.add_argument("--list", action="store_true", help="List all discovered Qt::Key_* references and line numbers.")
     parser.add_argument("--strict", action="store_true", help="Return 1 when possible missing help entries are found.")
+    parser.add_argument("--context", type=int, default=0, metavar="N", help="Show N characters of source context around reported key uses.")
     args = parser.parse_args(argv)
     if not SHORTCUTS_CPP.exists():
         print(f"ERROR: missing {SHORTCUTS_CPP}", file=sys.stderr); return 2
@@ -81,6 +101,9 @@ def main(argv: list[str] | None = None) -> int:
         for key in keys:
             ignored = " (ignored navigation)" if key in IGNORED_KEYS else ""
             print(f"  {key:<18} lines {format_lines(key_lines[key])}{ignored}")
+            snippet = compact_context(text, key, args.context)
+            if snippet:
+                print(f"      {snippet}")
         print()
     missing: list[tuple[str, str, list[int]]] = []
     for key in keys:
@@ -92,6 +115,9 @@ def main(argv: list[str] | None = None) -> int:
         print("Possibly missing from F12 help:")
         for key, display, used_lines in missing:
             print(f"  {key:<18} lines {format_lines(used_lines):<18} expected text like: {display}")
+            snippet = compact_context(text, key, args.context)
+            if snippet:
+                print(f"      {snippet}")
         print()
         print("Note: This is heuristic. Some keys may be internal or documented with different wording.")
         if args.strict: return 1

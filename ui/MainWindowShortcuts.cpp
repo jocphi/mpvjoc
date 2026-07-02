@@ -31,6 +31,8 @@ QString MainWindow::shortcutHelpText()const{
         "\n"
         "Playlist / media\n"
         "  Ctrl+F     Focus/select playlist search/filter\n"
+        "  Ctrl+O     Open files\n"
+        "  F4         Close current file\n"
         "  Esc        Clear search and return to playlist\n"
         "  Search     words = AND, -term = exclude, reviewed = reviewed rows\n"
         "  W          Toggle reviewed marker\n"
