@@ -24,6 +24,7 @@ add_executable(mpvjoc
     media/ThumbnailManager.cpp
     ui/TimelineWidget.cpp
     ui/MainWindow.cpp
+    ui/MainWindowShortcuts.cpp
 )
 
 target_include_directories(mpvjoc PRIVATE
