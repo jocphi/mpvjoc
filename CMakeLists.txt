@@ -32,6 +32,7 @@ add_executable(mpvjoc
     ui/MainWindowMove.cpp
     ui/MainWindowMedia.cpp
     ui/MainWindowFileActions.cpp
+    ui/MainWindowUi.cpp
 )
 
 target_include_directories(mpvjoc PRIVATE
