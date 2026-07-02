@@ -11,6 +11,7 @@
 #include <QDropEvent>
 #include <QEvent>
 #include <QKeyEvent>
+#include <QLineEdit>
 #include <QFileInfo>
 #include <QListView>
 #include <QMimeData>
@@ -42,7 +43,19 @@ static QStringList sortedDroppedPaths(const QStringList&paths){
     return sorted;
 }
 
-bool MainWindow::eventFilter(QObject*o,QEvent*ev){if(o==timeline&&(ev->type()==QEvent::MouseButtonPress||ev->type()==QEvent::FocusIn)){setPlaylistKeyboardFocus(false);}
+bool MainWindow::eventFilter(QObject*o,QEvent*ev){if(o==playlistSearchEdit&&ev->type()==QEvent::KeyPress){
+        auto*ke=static_cast<QKeyEvent*>(ev);
+        const int k=ke->key();
+        const auto mods=ke->modifiers();
+        const bool plain=((mods&~Qt::KeypadModifier)==Qt::NoModifier);
+        if(k==Qt::Key_Escape&&plain){
+            if(!playlistSearchEdit->text().isEmpty())playlistSearchEdit->clear();
+            setPlaylistKeyboardFocus(true);
+            ke->accept();
+            return true;
+        }
+    }
+    if(o==timeline&&(ev->type()==QEvent::MouseButtonPress||ev->type()==QEvent::FocusIn)){setPlaylistKeyboardFocus(false);}
     if(ev->type()==QEvent::FocusIn){if(o==playlistView||o==playlistView->viewport()){playlistKeyboardFocus=true;if(timeline)timeline->setPlaylistFocusMode(true);}else if(o==mpvWidget){setPlaylistKeyboardFocus(false);}}
     if(ev->type()==QEvent::KeyPress){auto*ke=static_cast<QKeyEvent*>(ev);const int k=ke->key();const auto mods=ke->modifiers();const bool plain=((mods&~Qt::KeypadModifier)==Qt::NoModifier);if(k==Qt::Key_Tab&&plain){toggleKeyboardFocusTarget();ke->accept();return true;}if((o==playlistView||o==playlistView->viewport())&&ev->type()==QEvent::KeyPress){
         auto*ke=static_cast<QKeyEvent*>(ev);
