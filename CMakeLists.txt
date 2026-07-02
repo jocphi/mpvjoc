@@ -54,7 +54,7 @@ target_link_libraries(mpvjoc PRIVATE
 # Development helper: audit shortcuts documented in the F12 help overlay.
 # This target is explicit-only; it is not part of the normal build.
 add_custom_target(audit-shortcut-help
-    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/audit_shortcut_help.py
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/audit_shortcut_help.py --context 140
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Auditing shortcut help coverage"
     VERBATIM
@@ -63,7 +63,7 @@ add_custom_target(audit-shortcut-help
 # Development helper: strict shortcut help audit. This target fails when possible
 # missing F12 help entries are found.
 add_custom_target(audit-shortcut-help-strict
-    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/audit_shortcut_help.py --strict
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/audit_shortcut_help.py --strict --context 140
     WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
     COMMENT "Auditing shortcut help coverage in strict mode"
     VERBATIM
