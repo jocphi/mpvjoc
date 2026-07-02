@@ -60,3 +60,12 @@ add_custom_target(audit-shortcut-help
     VERBATIM
 )
 
+# Development helper: strict shortcut help audit. This target fails when possible
+# missing F12 help entries are found.
+add_custom_target(audit-shortcut-help-strict
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/audit_shortcut_help.py --strict
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Auditing shortcut help coverage in strict mode"
+    VERBATIM
+)
+
