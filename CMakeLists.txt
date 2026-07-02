@@ -14,6 +14,7 @@ add_executable(mpvjoc
     util/Utils.cpp
     util/TextHighlighting.cpp
     mpv/MpvWidget.cpp
+    mpv/PlaybackOverlayWidget.cpp
     playlist/PlaylistModel.cpp
     playlist/PlaylistDelegate.cpp
     playlist/PlaylistFormatting.cpp
