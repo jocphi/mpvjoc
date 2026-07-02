@@ -38,8 +38,8 @@ private:
     double normalizedMaxVideoScale(double scale)const;
     void setMaxVideoScale(double scale);
     void updateScaleButtons();
-    void setCropVideoToScale(bool crop);
-    void updateCropButton();
+    void setClipVideoToScale(bool crop);
+    void updateClipButton();
     void toggleShortcutHelpOverlay();
     void setAutoPlayNextEnabled(bool enabled);
     void updateAutoPlayButton();
@@ -69,5 +69,5 @@ private:
     void moveSelectedItemUp();
     void moveSelectedItemDown();
     void showPlaylistContextMenu(const QPoint&p);
-    MpvWidget*mpvWidget=nullptr; PlaylistModel*playlistModel=nullptr; MetadataProbeManager*metadataProbe=nullptr; ThumbnailManager*thumbnailManager=nullptr; QListView*playlistView=nullptr; QSplitter*playlistSplitter=nullptr; TimelineWidget*timeline=nullptr; QLabel*timeLabel=nullptr; QLabel*playlistSummaryLabel=nullptr; QLabel*shortcutHelpOverlay=nullptr; QPushButton*playPauseButton=nullptr; QPushButton*muteButton=nullptr; QPushButton*scaleHalfButton=nullptr; QPushButton*scaleOneButton=nullptr; QPushButton*scaleTwoButton=nullptr; QPushButton*cropButton=nullptr; QPushButton*autoPlayButton=nullptr; QTabWidget*rightTabs=nullptr; QTextEdit*moveLogView=nullptr; QTimer*fastPlaybackTimer=nullptr; QVector<QPushButton*> moveButtons; QStringList moveButtonNames={"Move 1","Move 2","Move 3","Move 4","Move 5","Move 6"}; QStringList moveButtonPaths={"","","","","",""}; int moveButtonCount=6; double position=0,duration=0,currentVolume=100,maxVideoScale=1.0; int warpFactor=1; bool currentMuted=false; bool cropVideoToScale=true; bool restoringPlaybackState=true; bool suppressNextEndFileAdvance=false; bool warpPlaybackMode=false; bool autoPlayNextEnabled=true;
+    MpvWidget*mpvWidget=nullptr; PlaylistModel*playlistModel=nullptr; MetadataProbeManager*metadataProbe=nullptr; ThumbnailManager*thumbnailManager=nullptr; QListView*playlistView=nullptr; QSplitter*playlistSplitter=nullptr; TimelineWidget*timeline=nullptr; QLabel*timeLabel=nullptr; QLabel*playlistSummaryLabel=nullptr; QLabel*shortcutHelpOverlay=nullptr; QPushButton*playPauseButton=nullptr; QPushButton*muteButton=nullptr; QPushButton*scaleHalfButton=nullptr; QPushButton*scaleOneButton=nullptr; QPushButton*scaleTwoButton=nullptr; QPushButton*clipButton=nullptr; QPushButton*autoPlayButton=nullptr; QTabWidget*rightTabs=nullptr; QTextEdit*moveLogView=nullptr; QTimer*fastPlaybackTimer=nullptr; QVector<QPushButton*> moveButtons; QStringList moveButtonNames={"Move 1","Move 2","Move 3","Move 4","Move 5","Move 6"}; QStringList moveButtonPaths={"","","","","",""}; int moveButtonCount=6; double position=0,duration=0,currentVolume=100,maxVideoScale=1.0; int warpFactor=1; bool currentMuted=false; bool clipVideoToScale=true; bool restoringPlaybackState=true; bool suppressNextEndFileAdvance=false; bool warpPlaybackMode=false; bool autoPlayNextEnabled=true;
 };
