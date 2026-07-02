@@ -55,6 +55,8 @@ private:
     void generateMissingThumbnails();
     void removeMissingFilesFromPlaylist();
     void replacePlaylistWithFiles(const QStringList&files);
+    void addDroppedPaths(const QStringList&paths);
+    void replacePlaylistWithDroppedPaths(const QStringList&paths);
     void playPlaylistRow(int r);
     void selectPath(const QString&p);
     void updateTimeLabel(double p,double d);

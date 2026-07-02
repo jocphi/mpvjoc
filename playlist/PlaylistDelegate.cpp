@@ -150,5 +150,40 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     p->setPen(QColor(130, 130, 130));
     p->drawText(QRect(x, r.top() + 52, r.right() - x - 8, 18), Qt::AlignVCenter,
         p->fontMetrics().elidedText(i.data(PlaylistModel::PathRole).toString(), Qt::ElideMiddle, r.right() - x - 8));
+    if(i.data(PlaylistModel::FolderDropGroupRole).toBool()){
+        const bool first=i.data(PlaylistModel::FolderDropGroupFirstRole).toBool();
+        const bool last=i.data(PlaylistModel::FolderDropGroupLastRole).toBool();
+        QRect gr=r.adjusted(2,1,-3,-1);
+        QPen pen(QColor(205,150,0),2);
+        p->setPen(pen);
+        if(first)p->drawLine(gr.topLeft(),gr.topRight());
+        if(last)p->drawLine(gr.bottomLeft(),gr.bottomRight());
+        p->drawLine(gr.topLeft(),gr.bottomLeft());
+        p->drawLine(gr.topRight(),gr.bottomRight());
+    }
+    if(dk){
+        auto sameDurationAt=[&](int row){
+            if(!i.model()||row<0||row>=i.model()->rowCount())return false;
+            QModelIndex other=i.model()->index(row,0);
+            if(!other.data(PlaylistModel::DurationKnownRole).toBool())return false;
+            double otherDur=other.data(PlaylistModel::DurationRole).toDouble();
+            return qAbs(qRound64(otherDur)-qRound64(dur))==0;
+        };
+        const bool samePrev=sameDurationAt(i.row()-1);
+        const bool sameNext=sameDurationAt(i.row()+1);
+        if(samePrev||sameNext){
+            QRect linkRect=durationRect.adjusted(-3,0,3,0);
+            int yTop=samePrev?r.top():linkRect.top();
+            int yBottom=sameNext?r.bottom():linkRect.bottom();
+            QPen linkPen(QColor(255,0,0),2);
+            linkPen.setCosmetic(true);
+            p->setPen(linkPen);
+            p->setBrush(Qt::NoBrush);
+            p->drawLine(QPoint(linkRect.left(),yTop),QPoint(linkRect.left(),yBottom));
+            p->drawLine(QPoint(linkRect.right(),yTop),QPoint(linkRect.right(),yBottom));
+            if(!samePrev)p->drawLine(QPoint(linkRect.left(),linkRect.top()),QPoint(linkRect.right(),linkRect.top()));
+            if(!sameNext)p->drawLine(QPoint(linkRect.left(),linkRect.bottom()),QPoint(linkRect.right(),linkRect.bottom()));
+        }
+    }
     p->restore();
 }
