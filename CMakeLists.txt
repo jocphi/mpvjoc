@@ -25,6 +25,7 @@ add_executable(mpvjoc
     ui/TimelineWidget.cpp
     ui/MainWindow.cpp
     ui/MainWindowShortcuts.cpp
+    ui/MainWindowDrops.cpp
 )
 
 target_include_directories(mpvjoc PRIVATE
