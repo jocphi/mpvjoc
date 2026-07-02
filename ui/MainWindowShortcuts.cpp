@@ -14,6 +14,7 @@ QString MainWindow::shortcutHelpText()const{
         "Playback / Warp\n"
         "  P          Play/Pause, or leave Warp mode\n"
         "  Ctrl+P     Toggle Warp mode\n"
+        "  Q          Quit application\n"
         "  Left/Right Change Warp factor while Warp is active\n"
         "  F / D      Next / previous frame\n"
         "  M          Toggle mute\n"
