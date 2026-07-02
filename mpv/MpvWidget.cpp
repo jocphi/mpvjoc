@@ -45,6 +45,15 @@ public:
         QTimer::singleShot(700,this,[this,g]{ if(g==generation){if(warpActive){scaleText.clear();detailsText.clear();iconVisible=false;update();}else hide();} });
     }
     void hideOverlay(){hide();}
+    void showWarpFeedback(int factor){
+        int f=qBound(1,factor,9);
+        warpFeedbackText=QString("Warp %1 · +%2s").arg(f).arg(f*10);
+        show();
+        raise();
+        update();
+        int g=++warpFeedbackGeneration;
+        QTimer::singleShot(900,this,[this,g]{if(g==warpFeedbackGeneration){warpFeedbackText.clear();update();}});
+    }
     void setWarpState(bool active,int factor){
         warpActive=active;
         warpFactor=qBound(1,factor,9);
@@ -64,7 +73,7 @@ protected:
             wf.setPointSizeF(qBound(12.0,qMin(width(),height())*0.035,28.0));
             p.setFont(wf);
             p.setPen(QColor(255,80,80,245));
-            QString warpText=QString("Warp %1").arg(warpFactor);
+            QString warpText=warpFeedbackText.isEmpty()?QString("Warp %1").arg(warpFactor):warpFeedbackText;
             p.drawText(QRectF(0,8,width()-12,40),Qt::AlignRight|Qt::AlignVCenter,warpText);
         }
         int icon=qBound(64,qMin(width(),height())/5,150);
@@ -186,6 +195,8 @@ private:
     QSize renderedSize;
     bool warpActive=false;
     int warpFactor=1;
+    QString warpFeedbackText;
+    int warpFeedbackGeneration=0;
     int generation=0;
 };
 }
@@ -239,6 +250,11 @@ void MpvWidget::setWarpOverlay(bool active,int factor){
     if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
     playbackOverlay->setGeometry(rect());
     static_cast<PlaybackOverlayWidget*>(playbackOverlay)->setWarpState(active,factor);
+}
+void MpvWidget::showWarpFeedback(int factor){
+    if(!playbackOverlay)playbackOverlay=new PlaybackOverlayWidget(this);
+    playbackOverlay->setGeometry(rect());
+    static_cast<PlaybackOverlayWidget*>(playbackOverlay)->showWarpFeedback(factor);
 }
 MpvWidget::MpvWidget(QWidget*p):QOpenGLWidget(p){forceCLocaleForMpv();setMinimumSize(640,360);setFocusPolicy(Qt::StrongFocus); mpv=mpv_create(); if(!mpv)qFatal("no mpv"); check_mpv_error(mpv_set_option_string(mpv,"terminal","yes")); check_mpv_error(mpv_set_option_string(mpv,"msg-level","all=warn,libmpv_render=fatal")); check_mpv_error(mpv_set_option_string(mpv,"hwdec","auto-safe")); check_mpv_error(mpv_set_option_string(mpv,"video-unscaled","yes")); check_mpv_error(mpv_set_option_string(mpv,"vo","libmpv")); check_mpv_error(mpv_set_option_string(mpv,"input-default-bindings","no")); check_mpv_error(mpv_set_option_string(mpv,"osc","no")); check_mpv_error(mpv_initialize(mpv)); mpv_observe_property(mpv,1,"time-pos",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,2,"duration",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,3,"pause",MPV_FORMAT_FLAG); mpv_observe_property(mpv,4,"path",MPV_FORMAT_STRING); mpv_observe_property(mpv,5,"volume",MPV_FORMAT_DOUBLE); mpv_observe_property(mpv,6,"mute",MPV_FORMAT_FLAG); mpv_observe_property(mpv,7,"dwidth",MPV_FORMAT_INT64); mpv_observe_property(mpv,8,"dheight",MPV_FORMAT_INT64); mpv_set_wakeup_callback(mpv,wakeup,this);} 
 MpvWidget::~MpvWidget(){makeCurrent(); if(ctx)mpv_render_context_free(ctx); doneCurrent(); if(mpv)mpv_terminate_destroy(mpv);} 

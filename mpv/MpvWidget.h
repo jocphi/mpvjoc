@@ -39,6 +39,7 @@ public:
     void showVolumeOverlay(double volume,bool muted);
     void toggleInfoOverlay();
     void setWarpOverlay(bool active,int factor);
+    void showWarpFeedback(int factor);
 protected:
     void initializeGL()override;
     void paintGL()override;
