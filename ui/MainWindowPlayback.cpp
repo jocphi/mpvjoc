@@ -34,51 +34,14 @@ void MainWindow::toggleShortcutHelpOverlay(){
         shortcutHelpOverlay->setAttribute(Qt::WA_StyledBackground,true);
         QFont f=shortcutHelpOverlay->font();
         f.setFamily(QStringLiteral("monospace"));
-        f.setPointSize(10);
+        f.setPointSize(9);
         shortcutHelpOverlay->setFont(f);
         shortcutHelpOverlay->setStyleSheet(QStringLiteral(
             "QLabel{background:rgba(0,0,0,215);color:#eeeeee;border:2px solid #66ccff;border-radius:8px;padding:14px;}"));
-        shortcutHelpOverlay->setText(QStringLiteral(
-            "Keyboard shortcuts\n"
-            "\n"
-            "Playback\n"
-            "  P          Play/Pause, or leave Warp mode if active\n"
-            "  Ctrl+P     Toggle Warp mode\n"
-            "  Left/Right Change Warp factor while Warp mode is active\n"
-            "  F          Next frame\n"
-            "  D          Previous frame\n"
-            "  M          Toggle mute\n"
-            "  + / -      Volume up/down\n"
-            "\n"
-            "Scale / display\n"
-            "  1/2        Set scale to 50% with the 1/2 key\n"
-            "  1          Set scale to 100%\n"
-            "  2          Set scale to 200%\n"
-            "  0          Toggle clip/scale\n"
-            "  F1         Toggle persistent info overlay\n"
-            "  F12        Show/hide this help\n"
-            "  Esc        Hide this help\n"
-            "\n"
-            "Playlist\n"
-            "  Enter      Play selected\n"
-            "  PageDown   Next item\n"
-            "  PageUp     Previous item\n"
-            "  Delete     Remove from playlist\n"
-            "  Shift+Del  Move file to trash\n"
-            "  Ctrl+Del   Clear playlist\n"
-            "  Alt+Up     Move selected item up\n"
-            "  Alt+Down   Move selected item down\n"
-            "\n"
-            "Seeking\n"
-            "  .          Forward 60 seconds\n"
-            "  ,          Back 60 seconds\n"
-            "  Ctrl+.     Forward 10 seconds\n"
-            "  Ctrl+,     Back 10 seconds\n"
-            "  :          Forward 30 seconds\n"
-            "  ;          Back 30 seconds"));
+        shortcutHelpOverlay->setText(shortcutHelpText());
     }
     const int w=qMin(width()-40,620);
-    const int h=qMin(height()-40,520);
+    const int h=qMax(260,height()-40);
     shortcutHelpOverlay->setGeometry((width()-w)/2,(height()-h)/2,w,h);
     shortcutHelpOverlay->show();
     shortcutHelpOverlay->raise();
