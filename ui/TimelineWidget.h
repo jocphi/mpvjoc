@@ -5,6 +5,7 @@
 class TimelineWidget: public QWidget{
 public:
     explicit TimelineWidget(QWidget*p=nullptr);
+    void setPlaylistFocusMode(bool active);
     std::function<void(double)> seekRequested;
     std::function<void(double)> previewPositionChanged;
     void setPosition(double s);
@@ -16,6 +17,7 @@ protected:
     void mouseMoveEvent(QMouseEvent*e)override;
     void mouseReleaseEvent(QMouseEvent*e)override;
 private:
+    bool playlistFocusMode=false;
     void upd(double x);
     double pos=0,dur=0,prev=0;
     bool drag=false;

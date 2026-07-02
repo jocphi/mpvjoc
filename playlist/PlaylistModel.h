@@ -5,12 +5,12 @@
 #include <QPair>
 #include "media/MetadataProbeManager.h"
 
-struct PlaylistItem{ QString path,title; qint64 sizeBytes=0; double duration=0; bool durationKnown=false; QString codec,resolution,container; bool metadataProbed=false; QString thumbnailPath; bool thumbnailReady=false; bool thumbnailAttempted=false; };
+struct PlaylistItem{ QString path,title; qint64 sizeBytes=0; double duration=0; bool durationKnown=false; QString codec,resolution,container; bool metadataProbed=false; QString thumbnailPath; bool thumbnailReady=false; bool thumbnailAttempted=false; bool reviewed=false; };
 
 class PlaylistModel: public QAbstractListModel{
     Q_OBJECT
 public:
-    enum Roles{PathRole=Qt::UserRole+1,TitleRole,SizeRole,DurationRole,DurationKnownRole,CodecRole,ResolutionRole,ContainerRole,MetadataProbedRole,ThumbnailPathRole,ThumbnailReadyRole,ThumbnailAttemptedRole,FolderDropGroupRole,FolderDropGroupFirstRole,FolderDropGroupLastRole};
+    enum Roles{PathRole=Qt::UserRole+1,TitleRole,SizeRole,DurationRole,DurationKnownRole,CodecRole,ResolutionRole,ContainerRole,MetadataProbedRole,ThumbnailPathRole,ThumbnailReadyRole,ThumbnailAttemptedRole,FolderDropGroupRole,FolderDropGroupFirstRole,FolderDropGroupLastRole,ReviewedRole};
     explicit PlaylistModel(QObject*p=nullptr);
     int rowCount(const QModelIndex&p=QModelIndex())const override;
     QVariant data(const QModelIndex&i,int role=Qt::DisplayRole)const override;
@@ -33,6 +33,7 @@ public:
     void clearItems();
     bool moveRowUp(int r);
     bool moveRowDown(int r);
+    bool toggleReviewedAt(int r);
     void resetThumbnailAttempts();
     void setMetadataForPath(const QString&p,const MediaMetadata&m);
     void markProbeFailed(const QString&p);

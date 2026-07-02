@@ -55,9 +55,12 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
 {
     p->save();
     QRect r = o.rect;
+    bool reviewed = i.data(PlaylistModel::ReviewedRole).toBool();
     p->fillRect(r,
         (o.state & QStyle::State_Selected) ? QColor(38, 82, 48)
                                            : (i.row() % 2 ? QColor(36, 36, 36) : QColor(24, 24, 24)));
+    if (reviewed)
+        p->fillRect(r, QColor(0, 0, 0, 48));
     QRect th(r.left() + 8, r.top() + 6, 96, 54);
     p->fillRect(th, QColor(8, 8, 8));
     p->setPen(QColor(60, 60, 60));
@@ -97,6 +100,16 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     }
     QRect titleRect(x, r.top() + 7, r.width() - x + r.left() - 90, 20);
     drawHighlightedTitle(p, titleRect, title);
+    if (reviewed) {
+        QString reviewedText = QStringLiteral("reviewed");
+        int reviewedW = p->fontMetrics().horizontalAdvance(reviewedText) + 14;
+        QRect reviewedBadgeRect(r.right() - 86 - reviewedW - 8, r.top() + 8, reviewedW, 18);
+        p->setPen(Qt::NoPen);
+        p->setBrush(QColor(80, 120, 90));
+        p->drawRoundedRect(reviewedBadgeRect, 3, 3);
+        p->setPen(Qt::white);
+        p->drawText(reviewedBadgeRect, Qt::AlignCenter, reviewedText);
+    }
     QRect durationRect(r.right() - 86, r.top() + 7, 78, 20);
     const DuplicateDurationRunInfo duplicateRun = duplicateDurationRunInfo(i, dk, dur);
     if (duplicateRun.isDuplicate) {

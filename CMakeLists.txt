@@ -16,6 +16,7 @@ add_executable(mpvjoc
     mpv/MpvWidget.cpp
     mpv/PlaybackOverlayWidget.cpp
     playlist/PlaylistModel.cpp
+    playlist/PlaylistFilterProxyModel.cpp
     playlist/PlaylistDelegate.cpp
     playlist/PlaylistFormatting.cpp
     playlist/PlaylistBadges.cpp

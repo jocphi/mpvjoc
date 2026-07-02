@@ -5,9 +5,16 @@
 #include "util/Utils.h"
 #include <QFont>
 #include <QLabel>
+#include <QListView>
 #include <QPushButton>
 #include <QTimer>
 #include <QtGlobal>
+
+void MainWindow::setPlaylistKeyboardFocus(bool focus){
+    playlistKeyboardFocus=focus;
+    if(focus){if(playlistView)playlistView->setFocus(Qt::TabFocusReason);}else{if(mpvWidget)mpvWidget->setFocus(Qt::TabFocusReason);} if(timeline)timeline->setPlaylistFocusMode(playlistKeyboardFocus);
+}
+void MainWindow::toggleKeyboardFocusTarget(){setPlaylistKeyboardFocus(!playlistKeyboardFocus);}
 
 void MainWindow::updateMuteVolumeButton(){ if(!muteButton)return; muteButton->setText(QString("Vol %1%").arg(int(currentVolume+0.5))); QFont f=muteButton->font(); f.setStrikeOut(currentMuted); muteButton->setFont(f); muteButton->setToolTip(currentMuted?"Muted - click to unmute":"Click to mute"); }
 
