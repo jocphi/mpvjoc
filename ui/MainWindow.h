@@ -17,6 +17,10 @@ protected:
     void dropEvent(QDropEvent*e)override;
     void keyPressEvent(QKeyEvent*e)override;
 private:
+    void openSettingsDialog();
+    void loadTimelineColorSettings();
+    void saveTimelineColorSettings()const;
+    void applyTimelineHueTheme();
     QString stateFilePath()const;
     void updateMuteVolumeButton();
     void updatePlaylistSummary();
@@ -78,4 +82,7 @@ private:
     void setPlaylistKeyboardFocus(bool focus);
     void toggleKeyboardFocusTarget();
     MpvWidget*mpvWidget=nullptr; PlaylistModel*playlistModel=nullptr; MetadataProbeManager*metadataProbe=nullptr; ThumbnailManager*thumbnailManager=nullptr; QLineEdit*playlistSearchEdit=nullptr; QListView*playlistView=nullptr; PlaylistFilterProxyModel*playlistProxyModel=nullptr; QSplitter*playlistSplitter=nullptr; TimelineWidget*timeline=nullptr; QLabel*timeLabel=nullptr; QLabel*playlistSummaryLabel=nullptr; QLabel*shortcutHelpOverlay=nullptr; QPushButton*playPauseButton=nullptr; QPushButton*muteButton=nullptr; QPushButton*scaleHalfButton=nullptr; QPushButton*scaleOneButton=nullptr; QPushButton*scaleTwoButton=nullptr; QPushButton*clipButton=nullptr; QPushButton*autoPlayButton=nullptr; QTabWidget*rightTabs=nullptr; QTextEdit*moveLogView=nullptr; QTimer*fastPlaybackTimer=nullptr; QVector<QPushButton*> moveButtons; QStringList moveButtonNames={"Move 1","Move 2","Move 3","Move 4","Move 5","Move 6"}; QStringList moveButtonPaths={"","","","","",""}; int moveButtonCount=6; double position=0,duration=0,currentVolume=100,maxVideoScale=1.0; int warpFactor=1; bool currentMuted=false; bool clipVideoToScale=true; bool restoringPlaybackState=true; bool suppressNextEndFileAdvance=false; bool warpPlaybackMode=false; bool autoPlayNextEnabled=true; bool playlistKeyboardFocus=false;
+    int timelineGreenDarkPercent=80;
+    int timelineGreyDarkPercent=80;
+    int timelineRedDarkPercent=80;
 };

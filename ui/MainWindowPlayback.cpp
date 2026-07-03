@@ -1,4 +1,5 @@
 #include "MainWindow.h"
+#include <QColor>
 #include "TimelineWidget.h"
 #include "mpv/MpvWidget.h"
 #include "playlist/PlaylistModel.h"
@@ -9,10 +10,24 @@
 #include <QPushButton>
 #include <QTimer>
 #include <QtGlobal>
+#include <QLineEdit>
+#include <QDialog>
+#include <QDialogButtonBox>
+#include <QFormLayout>
+#include <QFrame>
+#include <QHBoxLayout>
+#include <QSettings>
+#include <QSpinBox>
+#include <QVBoxLayout>
+#include <QWidget>
+#include <QGroupBox>
+#include <QCheckBox>
 
 void MainWindow::setPlaylistKeyboardFocus(bool focus){
     playlistKeyboardFocus=focus;
     if(focus){if(playlistView)playlistView->setFocus(Qt::TabFocusReason);}else{if(mpvWidget)mpvWidget->setFocus(Qt::TabFocusReason);} if(timeline)timeline->setPlaylistFocusMode(playlistKeyboardFocus);
+
+    applyTimelineHueTheme();
 }
 void MainWindow::toggleKeyboardFocusTarget(){setPlaylistKeyboardFocus(!playlistKeyboardFocus);}
 
@@ -62,7 +77,171 @@ void MainWindow::setAutoPlayNextEnabled(bool enabled){autoPlayNextEnabled=enable
 
 void MainWindow::updateAutoPlayButton(){if(!autoPlayButton)return;autoPlayButton->setText(autoPlayNextEnabled?"auto":"manual");autoPlayButton->setToolTip(autoPlayNextEnabled?"Autoplay next playlist item enabled":"Autoplay next playlist item disabled");}
 
-void MainWindow::updateWarpOverlay(){if(mpvWidget)mpvWidget->setWarpOverlay(warpPlaybackMode,warpFactor);}
+
+
+void MainWindow::loadTimelineColorSettings(){
+    QSettings s(QStringLiteral("mpvjoc"),QStringLiteral("mpvjoc"));
+    timelineGreenDarkPercent=qBound(0,s.value(QStringLiteral("timeline/greenDarkPercent"),80).toInt(),100);
+    timelineGreyDarkPercent=qBound(0,s.value(QStringLiteral("timeline/greyDarkPercent"),80).toInt(),100);
+    timelineRedDarkPercent=qBound(0,s.value(QStringLiteral("timeline/redDarkPercent"),80).toInt(),100);
+}
+
+void MainWindow::saveTimelineColorSettings()const{
+    QSettings s(QStringLiteral("mpvjoc"),QStringLiteral("mpvjoc"));
+    s.setValue(QStringLiteral("timeline/greenDarkPercent"),timelineGreenDarkPercent);
+    s.setValue(QStringLiteral("timeline/greyDarkPercent"),timelineGreyDarkPercent);
+    s.setValue(QStringLiteral("timeline/redDarkPercent"),timelineRedDarkPercent);
+}
+
+void MainWindow::openSettingsDialog()
+{
+    QDialog dialog(this);
+    dialog.setWindowTitle(QStringLiteral("mpvjoc Settings"));
+    dialog.setModal(true);
+
+    auto* rootLayout = new QVBoxLayout(&dialog);
+    rootLayout->setContentsMargins(10, 10, 10, 10);
+    rootLayout->setSpacing(10);
+
+    auto scaledColor = [](const QColor& base, int percent) {
+        percent = qBound(0, percent, 100);
+        return QColor(qBound(0, base.red() * percent / 100, 255),
+                      qBound(0, base.green() * percent / 100, 255),
+                      qBound(0, base.blue() * percent / 100, 255));
+    };
+
+    auto setSwatch = [](QLabel* swatch, const QColor& color) {
+        if (!swatch)
+            return;
+        swatch->setStyleSheet(QStringLiteral("background-color: rgb(%1,%2,%3); border: 1px solid #777;")
+                                  .arg(color.red())
+                                  .arg(color.green())
+                                  .arg(color.blue()));
+    };
+
+    auto makeSwatch = [&](const QColor& color, QWidget* parent) {
+        auto* swatch = new QLabel(parent);
+        swatch->setFixedSize(46, 22);
+        swatch->setFrameShape(QFrame::Box);
+        setSwatch(swatch, color);
+        return swatch;
+    };
+
+    // Timeline section. More timeline settings can be added here later.
+    auto* timelineGroup = new QGroupBox(QStringLiteral("Timeline"), &dialog);
+    auto* timelineLayout = new QFormLayout(timelineGroup);
+    timelineLayout->setContentsMargins(10, 8, 10, 10);
+    timelineLayout->setSpacing(8);
+
+    auto makeTimelineRow = [&](const QString& title, const QColor& baseColor, int currentPercent) {
+        auto* row = new QWidget(timelineGroup);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(8);
+
+        auto* percent = new QSpinBox(row);
+        percent->setRange(0, 100);
+        percent->setSuffix(QStringLiteral("%"));
+        percent->setValue(qBound(0, currentPercent, 100));
+        percent->setFixedWidth(78);
+
+        auto* baseLabel = new QLabel(QStringLiteral("base"), row);
+        auto* baseSwatch = makeSwatch(baseColor, row);
+        auto* darkLabel = new QLabel(QStringLiteral("dark"), row);
+        auto* darkSwatch = makeSwatch(scaledColor(baseColor, percent->value()), row);
+
+        rowLayout->addWidget(percent);
+        rowLayout->addSpacing(8);
+        rowLayout->addWidget(baseLabel);
+        rowLayout->addWidget(baseSwatch);
+        rowLayout->addWidget(darkLabel);
+        rowLayout->addWidget(darkSwatch);
+        rowLayout->addStretch(1);
+
+        QObject::connect(percent, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), &dialog,
+            [=](int value) { setSwatch(darkSwatch, scaledColor(baseColor, value)); });
+
+        timelineLayout->addRow(title, row);
+        return percent;
+    };
+
+    auto* greenSpin = makeTimelineRow(QStringLiteral("Green/default dark tone"), QColor(0, 255, 0), timelineGreenDarkPercent);
+    auto* greySpin = makeTimelineRow(QStringLiteral("Grey/playlist focus dark tone"), QColor(128, 128, 128), timelineGreyDarkPercent);
+    auto* redSpin = makeTimelineRow(QStringLiteral("Red/Warp dark tone"), QColor(255, 0, 0), timelineRedDarkPercent);
+    rootLayout->addWidget(timelineGroup);
+
+    // Playback section. These are existing app states exposed in the settings dialog.
+    auto* playbackGroup = new QGroupBox(QStringLiteral("Playback"), &dialog);
+    auto* playbackLayout = new QVBoxLayout(playbackGroup);
+    playbackLayout->setContentsMargins(10, 8, 10, 10);
+    playbackLayout->setSpacing(6);
+
+    auto* autoPlayCheck = new QCheckBox(QStringLiteral("Auto-play next playlist item"), playbackGroup);
+    autoPlayCheck->setChecked(autoPlayNextEnabled);
+    autoPlayCheck->setToolTip(QStringLiteral("When enabled, end-of-file advances to the next playlist item."));
+
+    auto* clipCheck = new QCheckBox(QStringLiteral("Clip exact video scale when larger than the video area"), playbackGroup);
+    clipCheck->setChecked(clipVideoToScale);
+    clipCheck->setToolTip(QStringLiteral("When enabled, exact scale may clip video. When disabled, oversized video is scaled down to fit."));
+
+    playbackLayout->addWidget(autoPlayCheck);
+    playbackLayout->addWidget(clipCheck);
+    rootLayout->addWidget(playbackGroup);
+
+    // Playlist section. Currently informational, but deliberately placed here so
+    // future playlist settings have a clear home.
+    auto* playlistGroup = new QGroupBox(QStringLiteral("Playlist"), &dialog);
+    auto* playlistLayout = new QVBoxLayout(playlistGroup);
+    playlistLayout->setContentsMargins(10, 8, 10, 10);
+    playlistLayout->setSpacing(6);
+    auto* searchHint = new QLabel(
+        QStringLiteral("Search syntax: words are AND terms, prefix with - to exclude, use reviewed/watched/seen for reviewed rows."),
+        playlistGroup);
+    searchHint->setWordWrap(true);
+    playlistLayout->addWidget(searchHint);
+    rootLayout->addWidget(playlistGroup);
+
+    rootLayout->addStretch(1);
+
+    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    rootLayout->addWidget(buttons);
+
+    if (dialog.exec() == QDialog::Accepted) {
+        timelineGreenDarkPercent = greenSpin->value();
+        timelineGreyDarkPercent = greySpin->value();
+        timelineRedDarkPercent = redSpin->value();
+        saveTimelineColorSettings();
+        applyTimelineHueTheme();
+
+        setAutoPlayNextEnabled(autoPlayCheck->isChecked());
+        setClipVideoToScale(clipCheck->isChecked());
+        savePlaylistState();
+    }
+}
+
+
+
+void MainWindow::applyTimelineHueTheme(){
+    if(!timeline)return;
+    static bool timelineColorSettingsLoaded=false;
+    if(!timelineColorSettingsLoaded){loadTimelineColorSettings();timelineColorSettingsLoaded=true;}
+    const QColor defaultNormalHue(0,255,0);
+    const QColor defaultFocusHue(255,0,0);
+    const QColor playlistGreyHue(128,128,128);
+    const QColor warpRedHue(255,0,0);
+    const bool playlistFocusNow=playlistKeyboardFocus||(playlistView&&playlistView->hasFocus())||(playlistSearchEdit&&playlistSearchEdit->hasFocus());
+    if(warpPlaybackMode){
+        timeline->setTimelineDarkTonePercents(timelineRedDarkPercent,timelineRedDarkPercent);timeline->setTimelineHues(warpRedHue,warpRedHue);
+    }else if(playlistFocusNow){
+        timeline->setTimelineDarkTonePercents(timelineGreyDarkPercent,timelineGreyDarkPercent);timeline->setTimelineHues(playlistGreyHue,playlistGreyHue);
+    }else{
+        timeline->setTimelineDarkTonePercents(timelineGreenDarkPercent,timelineRedDarkPercent);timeline->setTimelineHues(defaultNormalHue,defaultFocusHue);
+    }
+}
+
+void MainWindow::updateWarpOverlay(){if(mpvWidget)mpvWidget->setWarpOverlay(warpPlaybackMode,warpFactor);applyTimelineHueTheme();}
 
 void MainWindow::setWarpFactor(int factor){warpFactor=qBound(1,factor,9);updateWarpOverlay();if(warpPlaybackMode&&mpvWidget)mpvWidget->showWarpFeedback(warpFactor);}
 
