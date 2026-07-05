@@ -18,7 +18,7 @@ int main(int argc,char**argv){
     QSurfaceFormat::setDefaultFormat(fmt);
     QApplication app(argc,argv);
     QCoreApplication::setApplicationName(QStringLiteral("mpvjoc"));
-    QCoreApplication::setOrganizationName(QStringLiteral("mpvjoc"));
+    QCoreApplication::setOrganizationName(QString()); // Keep AppConfigLocation at ~/.config/mpvjoc, not ~/.config/mpvjoc/mpvjoc.
     QGuiApplication::setDesktopFileName(QStringLiteral("mpvjoc"));
 
     QIcon mpvjocIcon;
