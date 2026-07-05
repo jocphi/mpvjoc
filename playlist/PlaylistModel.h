@@ -5,7 +5,7 @@
 #include <QPair>
 #include "media/MetadataProbeManager.h"
 
-struct PlaylistItem{ QString path,title; qint64 sizeBytes=0; double duration=0; bool durationKnown=false; QString codec,resolution,container; bool metadataProbed=false; QString thumbnailPath; bool thumbnailReady=false; bool thumbnailAttempted=false; bool reviewed=false; };
+struct PlaylistItem{ QString path,title; qint64 sizeBytes=0; double duration=0; bool durationKnown=false; QString codec,resolution,container; bool metadataProbed=false; QString thumbnailPath; bool thumbnailReady=false; bool thumbnailAttempted=false; bool reviewed=false; QString folderDropRoot; };
 
 class PlaylistModel: public QAbstractListModel{
     Q_OBJECT
@@ -23,9 +23,11 @@ public:
     bool moveRows(const QModelIndex&,int src,int count,const QModelIndex&,int dest)override;
     bool moveRowTo(int src,int final);
     QStringList addFiles(const QStringList&files);
-    QStringList addFolderGroup(const QStringList&files);
+    QStringList addFolderGroup(const QStringList&files,const QString&folderRoot=QString());
     void clearFolderDropGroups();
     QString pathAt(int r)const;
+    QString folderDropRootAt(int r)const;
+    bool isLastItemInFolderDropGroup(int r)const;
     int count()const;
     QStringList pathsNeedingProbe()const;
     QStringList pathsNeedingThumbnail()const;

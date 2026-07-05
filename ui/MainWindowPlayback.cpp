@@ -22,6 +22,11 @@
 #include <QWidget>
 #include <QGroupBox>
 #include <QCheckBox>
+#include <QComboBox>
+#include <QSignalBlocker>
+#include <QSet>
+#include <QList>
+#include <QPair>
 
 void MainWindow::setPlaylistKeyboardFocus(bool focus){
     playlistKeyboardFocus=focus;
@@ -93,6 +98,97 @@ void MainWindow::saveTimelineColorSettings()const{
     s.setValue(QStringLiteral("timeline/redDarkPercent"),timelineRedDarkPercent);
 }
 
+void MainWindow::loadOverlayCellSettings()
+{
+    QSettings s(QStringLiteral("mpvjoc"), QStringLiteral("mpvjoc"));
+    auto readCell = [&](const QString& key, int fallback) { return qBound(1, s.value(key, fallback).toInt(), 9); };
+    auto chooseUnique = [](int requested, int fallback, const QSet<int>& used) {
+        requested = qBound(1, requested, 9);
+        fallback = qBound(1, fallback, 9);
+        if (!used.contains(requested)) return requested;
+        if (!used.contains(fallback)) return fallback;
+        for (int cell = 1; cell <= 9; ++cell) if (!used.contains(cell)) return cell;
+        return fallback;
+    };
+    QSet<int> used;
+    overlayCenterCell = chooseUnique(readCell(QStringLiteral("overlay/centerCell"), 5), 5, used);
+    used.insert(overlayCenterCell);
+    overlayScaleDisplayCell = chooseUnique(readCell(QStringLiteral("overlay/scaleDisplayCell"), 8), 8, used);
+    used.insert(overlayScaleDisplayCell);
+    overlayVolumeCell = chooseUnique(readCell(QStringLiteral("overlay/volumeCell"), 6), 6, used);
+    used.insert(overlayVolumeCell);
+    overlayVisibilityMapCell = chooseUnique(readCell(QStringLiteral("overlay/visibilityMapCell"), 9), 9, used);
+    used.insert(overlayVisibilityMapCell);
+    overlayWarpLabelCell = chooseUnique(readCell(QStringLiteral("overlay/warpLabelCell"), 3), 3, used);
+
+    overlayCenterOpacity = qBound(0, s.value(QStringLiteral("overlay/centerOpacity"), overlayCenterOpacity).toInt(), 100);
+    overlayScaleDisplayOpacity = qBound(0, s.value(QStringLiteral("overlay/scaleDisplayOpacity"), overlayScaleDisplayOpacity).toInt(), 100);
+    overlayVolumeOpacity = qBound(0, s.value(QStringLiteral("overlay/volumeOpacity"), overlayVolumeOpacity).toInt(), 100);
+    overlayVisibilityMapOpacity = qBound(0, s.value(QStringLiteral("overlay/visibilityMapOpacity"), overlayVisibilityMapOpacity).toInt(), 100);
+    overlayWarpLabelOpacity = qBound(0, s.value(QStringLiteral("overlay/warpLabelOpacity"), overlayWarpLabelOpacity).toInt(), 100);
+}
+
+
+
+
+
+void MainWindow::saveOverlayCellSettings()
+{
+    QSettings s(QStringLiteral("mpvjoc"), QStringLiteral("mpvjoc"));
+    s.setValue(QStringLiteral("overlay/centerCell"), overlayCenterCell);
+    s.setValue(QStringLiteral("overlay/scaleDisplayCell"), overlayScaleDisplayCell);
+    s.setValue(QStringLiteral("overlay/volumeCell"), overlayVolumeCell);
+    s.setValue(QStringLiteral("overlay/visibilityMapCell"), overlayVisibilityMapCell);
+    s.setValue(QStringLiteral("overlay/warpLabelCell"), overlayWarpLabelCell);
+    s.setValue(QStringLiteral("overlay/centerOpacity"), overlayCenterOpacity);
+    s.setValue(QStringLiteral("overlay/scaleDisplayOpacity"), overlayScaleDisplayOpacity);
+    s.setValue(QStringLiteral("overlay/volumeOpacity"), overlayVolumeOpacity);
+    s.setValue(QStringLiteral("overlay/visibilityMapOpacity"), overlayVisibilityMapOpacity);
+    s.setValue(QStringLiteral("overlay/warpLabelOpacity"), overlayWarpLabelOpacity);
+}
+
+
+
+
+void MainWindow::applyOverlayCellSettings()
+{
+    if (mpvWidget) {
+        mpvWidget->setOverlayCells(overlayCenterCell, overlayScaleDisplayCell, overlayVolumeCell, overlayVisibilityMapCell, overlayWarpLabelCell);
+        mpvWidget->setOverlayOpacities(overlayCenterOpacity, overlayScaleDisplayOpacity, overlayVolumeOpacity, overlayVisibilityMapOpacity, overlayWarpLabelOpacity);
+    }
+}
+
+void MainWindow::loadOverlayProfileSettings()
+{
+    QSettings s(QStringLiteral("mpvjoc"), QStringLiteral("mpvjoc"));
+    auto readMask=[&](const QString& key,int fallback){int mask=s.value(key,fallback).toInt()&OverlayAll;return mask?mask:fallback;};
+    overlayProfilePersistentInfo=readMask(QStringLiteral("overlayProfiles/persistentInfo"),OverlayAll);
+    overlayProfilePlayStateChange=readMask(QStringLiteral("overlayProfiles/playStateChange"),OverlayPlayState|OverlayScaleDisplay);
+    overlayProfileVolumeChange=readMask(QStringLiteral("overlayProfiles/volumeChange"),OverlayVolume);
+    overlayProfileWarpMode=readMask(QStringLiteral("overlayProfiles/warpMode"),OverlayWarpLabel);
+    overlayProfileScaleChange=readMask(QStringLiteral("overlayProfiles/scaleChange"),OverlayScaleDisplay);
+}
+
+void MainWindow::saveOverlayProfileSettings()
+{
+    QSettings s(QStringLiteral("mpvjoc"), QStringLiteral("mpvjoc"));
+    s.setValue(QStringLiteral("overlayProfiles/persistentInfo"),overlayProfilePersistentInfo);
+    s.setValue(QStringLiteral("overlayProfiles/playStateChange"),overlayProfilePlayStateChange);
+    s.setValue(QStringLiteral("overlayProfiles/volumeChange"),overlayProfileVolumeChange);
+    s.setValue(QStringLiteral("overlayProfiles/warpMode"),overlayProfileWarpMode);
+    s.setValue(QStringLiteral("overlayProfiles/scaleChange"),overlayProfileScaleChange);
+}
+
+void MainWindow::applyOverlayProfileSettings()
+{
+    if(mpvWidget)mpvWidget->setOverlayProfiles(overlayProfilePersistentInfo,overlayProfilePlayStateChange,overlayProfileVolumeChange,overlayProfileWarpMode,overlayProfileScaleChange);
+}
+
+
+
+
+
+
 void MainWindow::openSettingsDialog()
 {
     QDialog dialog(this);
@@ -127,7 +223,6 @@ void MainWindow::openSettingsDialog()
         return swatch;
     };
 
-    // Timeline section. More timeline settings can be added here later.
     auto* timelineGroup = new QGroupBox(QStringLiteral("Timeline"), &dialog);
     auto* timelineLayout = new QFormLayout(timelineGroup);
     timelineLayout->setContentsMargins(10, 8, 10, 10);
@@ -138,18 +233,15 @@ void MainWindow::openSettingsDialog()
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
         rowLayout->setSpacing(8);
-
         auto* percent = new QSpinBox(row);
         percent->setRange(0, 100);
         percent->setSuffix(QStringLiteral("%"));
         percent->setValue(qBound(0, currentPercent, 100));
         percent->setFixedWidth(78);
-
         auto* baseLabel = new QLabel(QStringLiteral("base"), row);
         auto* baseSwatch = makeSwatch(baseColor, row);
         auto* darkLabel = new QLabel(QStringLiteral("dark"), row);
         auto* darkSwatch = makeSwatch(scaledColor(baseColor, percent->value()), row);
-
         rowLayout->addWidget(percent);
         rowLayout->addSpacing(8);
         rowLayout->addWidget(baseLabel);
@@ -157,10 +249,8 @@ void MainWindow::openSettingsDialog()
         rowLayout->addWidget(darkLabel);
         rowLayout->addWidget(darkSwatch);
         rowLayout->addStretch(1);
-
         QObject::connect(percent, static_cast<void (QSpinBox::*)(int)>(&QSpinBox::valueChanged), &dialog,
             [=](int value) { setSwatch(darkSwatch, scaledColor(baseColor, value)); });
-
         timelineLayout->addRow(title, row);
         return percent;
     };
@@ -170,37 +260,191 @@ void MainWindow::openSettingsDialog()
     auto* redSpin = makeTimelineRow(QStringLiteral("Red/Warp dark tone"), QColor(255, 0, 0), timelineRedDarkPercent);
     rootLayout->addWidget(timelineGroup);
 
-    // Playback section. These are existing app states exposed in the settings dialog.
+    auto* overlayGroup = new QGroupBox(QStringLiteral("Overlay layout"), &dialog);
+    auto* overlayLayout = new QFormLayout(overlayGroup);
+    overlayLayout->setContentsMargins(10, 8, 10, 10);
+    overlayLayout->setSpacing(8);
+    auto* gridHint = new QLabel(QStringLiteral("Grid cells: 1 2 3 / 4 5 6 / 7 8 9"), overlayGroup);
+    gridHint->setWordWrap(true);
+    overlayLayout->addRow(QStringLiteral("Grid"), gridHint);
+
+    auto makeCellCombo = [&](int currentValue) {
+        auto* combo = new QComboBox(overlayGroup);
+        combo->setFixedWidth(76);
+        combo->setEditable(false);
+        combo->setSizeAdjustPolicy(QComboBox::AdjustToContents);
+        combo->setProperty("cell", qBound(1, currentValue, 9));
+        return combo;
+    };
+    auto comboCell = [](QComboBox* combo) {
+        return combo->currentData().isValid() ? combo->currentData().toInt() : combo->property("cell").toInt();
+    };
+    auto setComboChoices = [&](QComboBox* combo, int currentValue, const QSet<int>& blocked) {
+        currentValue = qBound(1, currentValue, 9);
+        QSignalBlocker blocker(combo);
+        combo->clear();
+        for (int cell = 1; cell <= 9; ++cell) {
+            if (cell == currentValue || !blocked.contains(cell))
+                combo->addItem(QString::number(cell), cell);
+        }
+        const int index = combo->findData(currentValue);
+        if (index >= 0)
+            combo->setCurrentIndex(index);
+        combo->setProperty("cell", currentValue);
+    };
+
+    auto* playStateCellCombo = makeCellCombo(overlayCenterCell);
+    auto* scaleDisplayCellCombo = makeCellCombo(overlayScaleDisplayCell);
+    auto* volumeCellCombo = makeCellCombo(overlayVolumeCell);
+    auto* mapCellCombo = makeCellCombo(overlayVisibilityMapCell);
+    auto* warpCellCombo = makeCellCombo(overlayWarpLabelCell);
+
+    auto updateOverlayCombos = [&]() {
+        int playState = qBound(1, comboCell(playStateCellCombo), 9);
+        int scaleDisplay = qBound(1, comboCell(scaleDisplayCellCombo), 9);
+        int volume = qBound(1, comboCell(volumeCellCombo), 9);
+        int map = qBound(1, comboCell(mapCellCombo), 9);
+        int warp = qBound(1, comboCell(warpCellCombo), 9);
+        QSet<int> used;
+        auto unique = [&](int requested, int fallback) {
+            requested = qBound(1, requested, 9);
+            fallback = qBound(1, fallback, 9);
+            if (!used.contains(requested)) { used.insert(requested); return requested; }
+            if (!used.contains(fallback)) { used.insert(fallback); return fallback; }
+            for (int cell = 1; cell <= 9; ++cell) if (!used.contains(cell)) { used.insert(cell); return cell; }
+            return fallback;
+        };
+        playState = unique(playState, 5);
+        scaleDisplay = unique(scaleDisplay, 8);
+        volume = unique(volume, 6);
+        map = unique(map, 9);
+        warp = unique(warp, 3);
+        setComboChoices(playStateCellCombo, playState, QSet<int> { scaleDisplay, volume, map, warp });
+        setComboChoices(scaleDisplayCellCombo, scaleDisplay, QSet<int> { playState, volume, map, warp });
+        setComboChoices(volumeCellCombo, volume, QSet<int> { playState, scaleDisplay, map, warp });
+        setComboChoices(mapCellCombo, map, QSet<int> { playState, scaleDisplay, volume, warp });
+        setComboChoices(warpCellCombo, warp, QSet<int> { playState, scaleDisplay, volume, map });
+    };
+
+    for (auto* combo : { playStateCellCombo, scaleDisplayCellCombo, volumeCellCombo, mapCellCombo, warpCellCombo }) {
+        QObject::connect(combo, static_cast<void (QComboBox::*)(int)>(&QComboBox::currentIndexChanged), &dialog,
+            [&, combo](int) { combo->setProperty("cell", comboCell(combo)); updateOverlayCombos(); });
+    }
+    updateOverlayCombos();
+
+    auto makeOpacitySpin = [&](int currentValue) {
+        auto* spin = new QSpinBox(overlayGroup);
+        spin->setRange(0, 100);
+        spin->setSuffix(QStringLiteral("%"));
+        spin->setValue(qBound(0, currentValue, 100));
+        spin->setFixedWidth(78);
+        return spin;
+    };
+    auto makeOverlayRow = [&](QComboBox* cellCombo, QSpinBox* opacitySpin) {
+        auto* row = new QWidget(overlayGroup);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(8);
+        rowLayout->addWidget(new QLabel(QStringLiteral("cell"), row));
+        rowLayout->addWidget(cellCombo);
+        rowLayout->addSpacing(12);
+        rowLayout->addWidget(new QLabel(QStringLiteral("transparency"), row));
+        rowLayout->addWidget(opacitySpin);
+        rowLayout->addStretch(1);
+        return row;
+    };
+
+    auto* playStateOpacitySpin = makeOpacitySpin(overlayCenterOpacity);
+    auto* scaleDisplayOpacitySpin = makeOpacitySpin(overlayScaleDisplayOpacity);
+    auto* volumeOpacitySpin = makeOpacitySpin(overlayVolumeOpacity);
+    auto* mapOpacitySpin = makeOpacitySpin(overlayVisibilityMapOpacity);
+    auto* warpOpacitySpin = makeOpacitySpin(overlayWarpLabelOpacity);
+    overlayLayout->addRow(QStringLiteral("Play state"), makeOverlayRow(playStateCellCombo, playStateOpacitySpin));
+    overlayLayout->addRow(QStringLiteral("Scale display"), makeOverlayRow(scaleDisplayCellCombo, scaleDisplayOpacitySpin));
+    overlayLayout->addRow(QStringLiteral("Volume overlay"), makeOverlayRow(volumeCellCombo, volumeOpacitySpin));
+    overlayLayout->addRow(QStringLiteral("Visibility map"), makeOverlayRow(mapCellCombo, mapOpacitySpin));
+    overlayLayout->addRow(QStringLiteral("Warp label"), makeOverlayRow(warpCellCombo, warpOpacitySpin));
+    rootLayout->addWidget(overlayGroup);
+
+    auto* profilesGroup = new QGroupBox(QStringLiteral("Overlay profiles"), &dialog);
+    auto* profilesLayout = new QVBoxLayout(profilesGroup);
+    profilesLayout->setContentsMargins(10, 8, 10, 10);
+    profilesLayout->setSpacing(8);
+    auto* profilesHint = new QLabel(QStringLiteral("Choose which overlay elements are shown for each overlay mode."), profilesGroup);
+    profilesHint->setWordWrap(true);
+    profilesLayout->addWidget(profilesHint);
+
+    auto makeProfileRow = [&](const QString& title, int mask) {
+        auto* row = new QWidget(profilesGroup);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0, 0, 0, 0);
+        rowLayout->setSpacing(8);
+        auto* titleLabel = new QLabel(title, row);
+        titleLabel->setMinimumWidth(135);
+        rowLayout->addWidget(titleLabel);
+        auto* play = new QCheckBox(QStringLiteral("Play"), row);
+        auto* scale = new QCheckBox(QStringLiteral("Scale"), row);
+        auto* volume = new QCheckBox(QStringLiteral("Volume"), row);
+        auto* map = new QCheckBox(QStringLiteral("Map"), row);
+        auto* warp = new QCheckBox(QStringLiteral("Warp"), row);
+        play->setChecked(mask & OverlayPlayState);
+        scale->setChecked(mask & OverlayScaleDisplay);
+        volume->setChecked(mask & OverlayVolume);
+        map->setChecked(mask & OverlayVisibilityMap);
+        warp->setChecked(mask & OverlayWarpLabel);
+        rowLayout->addWidget(play);
+        rowLayout->addWidget(scale);
+        rowLayout->addWidget(volume);
+        rowLayout->addWidget(map);
+        rowLayout->addWidget(warp);
+        rowLayout->addStretch(1);
+        return QPair<QWidget*, QList<QCheckBox*>>(row, QList<QCheckBox*> { play, scale, volume, map, warp });
+    };
+
+    auto persistentProfile = makeProfileRow(QStringLiteral("F1 persistent"), overlayProfilePersistentInfo);
+    auto playStateProfile = makeProfileRow(QStringLiteral("Play state change"), overlayProfilePlayStateChange);
+    auto volumeProfile = makeProfileRow(QStringLiteral("Volume change"), overlayProfileVolumeChange);
+    auto warpProfile = makeProfileRow(QStringLiteral("Warp mode"), overlayProfileWarpMode);
+    auto scaleProfile = makeProfileRow(QStringLiteral("Scale change"), overlayProfileScaleChange);
+    profilesLayout->addWidget(persistentProfile.first);
+    profilesLayout->addWidget(playStateProfile.first);
+    profilesLayout->addWidget(volumeProfile.first);
+    profilesLayout->addWidget(warpProfile.first);
+    profilesLayout->addWidget(scaleProfile.first);
+    rootLayout->addWidget(profilesGroup);
+
+    auto profileMask = [](const QList<QCheckBox*>& checks) {
+        int mask = 0;
+        if (checks.value(0) && checks.value(0)->isChecked()) mask |= OverlayPlayState;
+        if (checks.value(1) && checks.value(1)->isChecked()) mask |= OverlayScaleDisplay;
+        if (checks.value(2) && checks.value(2)->isChecked()) mask |= OverlayVolume;
+        if (checks.value(3) && checks.value(3)->isChecked()) mask |= OverlayVisibilityMap;
+        if (checks.value(4) && checks.value(4)->isChecked()) mask |= OverlayWarpLabel;
+        return mask;
+    };
+
     auto* playbackGroup = new QGroupBox(QStringLiteral("Playback"), &dialog);
     auto* playbackLayout = new QVBoxLayout(playbackGroup);
     playbackLayout->setContentsMargins(10, 8, 10, 10);
     playbackLayout->setSpacing(6);
-
     auto* autoPlayCheck = new QCheckBox(QStringLiteral("Auto-play next playlist item"), playbackGroup);
     autoPlayCheck->setChecked(autoPlayNextEnabled);
     autoPlayCheck->setToolTip(QStringLiteral("When enabled, end-of-file advances to the next playlist item."));
-
     auto* clipCheck = new QCheckBox(QStringLiteral("Clip exact video scale when larger than the video area"), playbackGroup);
     clipCheck->setChecked(clipVideoToScale);
     clipCheck->setToolTip(QStringLiteral("When enabled, exact scale may clip video. When disabled, oversized video is scaled down to fit."));
-
     playbackLayout->addWidget(autoPlayCheck);
     playbackLayout->addWidget(clipCheck);
     rootLayout->addWidget(playbackGroup);
 
-    // Playlist section. Currently informational, but deliberately placed here so
-    // future playlist settings have a clear home.
     auto* playlistGroup = new QGroupBox(QStringLiteral("Playlist"), &dialog);
     auto* playlistLayout = new QVBoxLayout(playlistGroup);
     playlistLayout->setContentsMargins(10, 8, 10, 10);
     playlistLayout->setSpacing(6);
-    auto* searchHint = new QLabel(
-        QStringLiteral("Search syntax: words are AND terms, prefix with - to exclude, use reviewed/watched/seen for reviewed rows."),
-        playlistGroup);
+    auto* searchHint = new QLabel(QStringLiteral("Search syntax: words are AND terms, prefix with - to exclude, use reviewed/watched/seen for reviewed rows."), playlistGroup);
     searchHint->setWordWrap(true);
     playlistLayout->addWidget(searchHint);
     rootLayout->addWidget(playlistGroup);
-
     rootLayout->addStretch(1);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
@@ -212,9 +456,27 @@ void MainWindow::openSettingsDialog()
         timelineGreenDarkPercent = greenSpin->value();
         timelineGreyDarkPercent = greySpin->value();
         timelineRedDarkPercent = redSpin->value();
+        overlayCenterCell = comboCell(playStateCellCombo);
+        overlayScaleDisplayCell = comboCell(scaleDisplayCellCombo);
+        overlayVolumeCell = comboCell(volumeCellCombo);
+        overlayVisibilityMapCell = comboCell(mapCellCombo);
+        overlayWarpLabelCell = comboCell(warpCellCombo);
+        overlayCenterOpacity = playStateOpacitySpin->value();
+        overlayScaleDisplayOpacity = scaleDisplayOpacitySpin->value();
+        overlayVolumeOpacity = volumeOpacitySpin->value();
+        overlayVisibilityMapOpacity = mapOpacitySpin->value();
+        overlayWarpLabelOpacity = warpOpacitySpin->value();
+        overlayProfilePersistentInfo = profileMask(persistentProfile.second);
+        overlayProfilePlayStateChange = profileMask(playStateProfile.second);
+        overlayProfileVolumeChange = profileMask(volumeProfile.second);
+        overlayProfileWarpMode = profileMask(warpProfile.second);
+        overlayProfileScaleChange = profileMask(scaleProfile.second);
         saveTimelineColorSettings();
+        saveOverlayCellSettings();
+        saveOverlayProfileSettings();
         applyTimelineHueTheme();
-
+        applyOverlayCellSettings();
+        applyOverlayProfileSettings();
         setAutoPlayNextEnabled(autoPlayCheck->isChecked());
         setClipVideoToScale(clipCheck->isChecked());
         savePlaylistState();
@@ -223,10 +485,16 @@ void MainWindow::openSettingsDialog()
 
 
 
+
+
+
+
+
+
 void MainWindow::applyTimelineHueTheme(){
     if(!timeline)return;
     static bool timelineColorSettingsLoaded=false;
-    if(!timelineColorSettingsLoaded){loadTimelineColorSettings();timelineColorSettingsLoaded=true;}
+    if(!timelineColorSettingsLoaded){loadTimelineColorSettings();loadOverlayCellSettings();loadOverlayProfileSettings();timelineColorSettingsLoaded=true;}
     const QColor defaultNormalHue(0,255,0);
     const QColor defaultFocusHue(255,0,0);
     const QColor playlistGreyHue(128,128,128);
@@ -239,6 +507,8 @@ void MainWindow::applyTimelineHueTheme(){
     }else{
         timeline->setTimelineDarkTonePercents(timelineGreenDarkPercent,timelineRedDarkPercent);timeline->setTimelineHues(defaultNormalHue,defaultFocusHue);
     }
+
+    applyOverlayCellSettings();
 }
 
 void MainWindow::updateWarpOverlay(){if(mpvWidget)mpvWidget->setWarpOverlay(warpPlaybackMode,warpFactor);applyTimelineHueTheme();}

@@ -17,6 +17,19 @@ PlaybackOverlayWidget::PlaybackOverlayWidget(QWidget* parent)
     hide();
 }
 
+void PlaybackOverlayWidget::setOverlayElementMask(int mask)
+{
+    overlayElementMask = mask & AllOverlayElements;
+    update();
+}
+
+
+void PlaybackOverlayWidget::setVolumeText(const QString& text)
+{
+    volumeText = text;
+    update();
+}
+
 void PlaybackOverlayWidget::showOverlay(bool paused,
                                         const QString& scale,
                                         const QString& details,
@@ -27,19 +40,11 @@ void PlaybackOverlayWidget::showOverlay(bool paused,
 {
     pauseIcon = paused;
     scaleText = scale;
+    volumeText.clear();
     detailsText = details;
     iconVisible = showIcon;
     viewportSize = viewport;
     renderedSize = rendered;
-
-    // Warp mode owns the video overlay while active. Keep only Warp border/label.
-    if (warpActive) {
-        scaleText.clear();
-        detailsText.clear();
-        iconVisible = false;
-        viewportSize = QSize();
-        renderedSize = QSize();
-    }
 
     const int g = ++generation;
     show();
@@ -53,10 +58,9 @@ void PlaybackOverlayWidget::showOverlay(bool paused,
         if (g == generation) {
             if (warpActive) {
                 scaleText.clear();
+                volumeText.clear();
                 detailsText.clear();
                 iconVisible = false;
-                viewportSize = QSize();
-                renderedSize = QSize();
                 update();
             } else {
                 hide();
@@ -65,9 +69,71 @@ void PlaybackOverlayWidget::showOverlay(bool paused,
     });
 }
 
+
+void PlaybackOverlayWidget::showVolumeOverlay(bool paused,
+                                              const QString& text,
+                                              const QString& scale,
+                                              const QString& details,
+                                              const QSize& viewport,
+                                              const QSize& rendered)
+{
+    pauseIcon = paused;
+    iconVisible = true;
+    scaleText = scale;
+    volumeText = text;
+    detailsText = details;
+    viewportSize = viewport;
+    renderedSize = rendered;
+
+    const int g = ++generation;
+    show();
+    raise();
+    update();
+
+    QTimer::singleShot(700, this, [this, g] {
+        if (g == generation) {
+            if (warpActive) {
+                scaleText.clear();
+                volumeText.clear();
+                detailsText.clear();
+                iconVisible = false;
+                update();
+            } else {
+                hide();
+            }
+        }
+    });
+}
+
+
+
 void PlaybackOverlayWidget::hideOverlay()
 {
     hide();
+}
+
+void PlaybackOverlayWidget::setOverlayCells(int playStateCellValue, int scaleDisplayCellValue, int volumeOverlayCellValue, int visibilityMapCellValue, int warpLabelCellValue)
+{
+    playStateCell = qBound(1, playStateCellValue, 9);
+    scaleDisplayCell = qBound(1, scaleDisplayCellValue, 9);
+    volumeOverlayCell = qBound(1, volumeOverlayCellValue, 9);
+    visibilityMapCell = qBound(1, visibilityMapCellValue, 9);
+    warpLabelCell = qBound(1, warpLabelCellValue, 9);
+    update();
+}
+
+void PlaybackOverlayWidget::setOverlayOpacities(int playStateOpacityValue,
+                                                int scaleDisplayOpacityValue,
+                                                int volumeOverlayOpacityValue,
+                                                int visibilityMapOpacityValue,
+                                                int warpLabelOpacityValue)
+{
+    playStateOpacity = qBound(0, playStateOpacityValue, 100);
+    scaleDisplayOpacity = qBound(0, scaleDisplayOpacityValue, 100);
+    volumeOverlayOpacity = qBound(0, volumeOverlayOpacityValue, 100);
+    visibilityMapOpacity = qBound(0, visibilityMapOpacityValue, 100);
+    warpLabelOpacity = qBound(0, warpLabelOpacityValue, 100);
+    update();
 }
 
 void PlaybackOverlayWidget::setWarpState(bool active, int factor)
@@ -76,20 +142,15 @@ void PlaybackOverlayWidget::setWarpState(bool active, int factor)
     warpFactor = qBound(1, factor, 9);
 
     if (warpActive) {
-        // Suppress normal overlay content while Warp is active.
-        scaleText.clear();
-        detailsText.clear();
-        iconVisible = false;
-        viewportSize = QSize();
-        renderedSize = QSize();
         show();
         raise();
-    } else if (scaleText.isEmpty() && detailsText.isEmpty()) {
+    } else if (scaleText.isEmpty() && volumeText.isEmpty() && detailsText.isEmpty()) {
         hide();
     }
 
     update();
 }
+
 
 void PlaybackOverlayWidget::showWarpFeedback(int factor)
 {
@@ -124,19 +185,27 @@ void PlaybackOverlayWidget::paintEvent(QPaintEvent*)
     QPainter p(this);
     p.setRenderHint(QPainter::Antialiasing, true);
 
-    if (warpActive)
+    if (warpActive && (overlayElementMask & WarpLabelElement))
         drawWarpOverlay(p);
 
-    if (iconVisible || !scaleText.isEmpty())
-        drawCenterOverlay(p, overlayCellRect(centerOverlayCell));
+    if (iconVisible && (overlayElementMask & PlayStateElement))
+        drawPlayStateOverlay(p, overlayCellRect(playStateCell));
 
-    if (!detailsText.isEmpty() && viewportSize.isValid() && renderedSize.isValid())
+    if (!scaleText.isEmpty() && (overlayElementMask & ScaleDisplayElement))
+        drawTextOverlay(p, overlayCellRect(scaleDisplayCell), scaleText, scaleDisplayOpacity);
+
+    if (!volumeText.isEmpty() && (overlayElementMask & VolumeOverlayElement))
+        drawTextOverlay(p, overlayCellRect(volumeOverlayCell), volumeText, volumeOverlayOpacity);
+
+    if (!detailsText.isEmpty() && viewportSize.isValid() && renderedSize.isValid() && (overlayElementMask & VisibilityMapElement))
         drawVisibilityMap(p, overlayCellRect(visibilityMapCell));
 }
+
 
 void PlaybackOverlayWidget::drawWarpOverlay(QPainter& p)
 {
     p.save();
+    p.setOpacity(warpLabelOpacity / 100.0);
     p.setPen(QPen(QColor(255, 0, 0, 235), 3));
     p.setBrush(Qt::NoBrush);
     p.drawRect(rect().adjusted(1, 1, -2, -2));
@@ -162,23 +231,24 @@ void PlaybackOverlayWidget::drawWarpOverlay(QPainter& p)
     p.restore();
 }
 
-void PlaybackOverlayWidget::drawCenterOverlay(QPainter& p, const QRectF& cell)
+void PlaybackOverlayWidget::drawPlayStateOverlay(QPainter& p, const QRectF& cell)
 {
     p.save();
+    p.setOpacity(playStateOpacity / 100.0);
 
     const qreal side = qMin(cell.width(), cell.height());
-    const qreal icon = qBound(38.0, side * 0.34, 112.0);
-    const QPointF c(cell.center().x(), cell.center().y() - icon * 0.08);
-    const qreal bgW = qMin(cell.width() * 0.86, icon * 1.75);
-    const qreal bgH = qMin(cell.height() * 0.76, icon * 1.55);
-    QRectF bgRect(c.x() - bgW / 2.0, c.y() - bgH / 2.0, bgW, bgH);
+    const qreal icon = qBound(38.0, side * 0.44, 120.0);
+    const QPointF c(cell.center());
+    const qreal bgW = qMin(cell.width() * 0.78, icon * 1.55);
+    const qreal bgH = qMin(cell.height() * 0.72, icon * 1.40);
+    const QRectF bgRect(c.x() - bgW / 2.0, c.y() - bgH / 2.0, bgW, bgH);
 
     p.setPen(Qt::NoPen);
     p.setBrush(QColor(0, 0, 0, 145));
     p.drawRoundedRect(bgRect, bgW * 0.14, bgW * 0.14);
 
     p.setBrush(QColor(255, 255, 255, 235));
-    if (iconVisible && pauseIcon) {
+    if (pauseIcon) {
         const qreal bw = icon * 0.22;
         const qreal bh = icon * 0.72;
         const qreal gap = icon * 0.18;
@@ -187,7 +257,7 @@ void PlaybackOverlayWidget::drawCenterOverlay(QPainter& p, const QRectF& cell)
         const qreal rx = c.x() + gap / 2.0;
         p.drawRoundedRect(QRectF(lx, top, bw, bh), bw * 0.28, bw * 0.28);
         p.drawRoundedRect(QRectF(rx, top, bw, bh), bw * 0.28, bw * 0.28);
-    } else if (iconVisible) {
+    } else {
         QPolygonF tri;
         tri << QPointF(c.x() - icon * 0.24, c.y() - icon * 0.36)
             << QPointF(c.x() - icon * 0.24, c.y() + icon * 0.36)
@@ -195,17 +265,34 @@ void PlaybackOverlayWidget::drawCenterOverlay(QPainter& p, const QRectF& cell)
         p.drawPolygon(tri);
     }
 
-    if (!scaleText.isEmpty()) {
-        QFont font = p.font();
-        font.setBold(true);
-        font.setPointSizeF(qBound(10.0, side * 0.085, 24.0));
-        p.setFont(font);
-        p.setPen(QColor(255, 255, 255, 235));
+    p.restore();
+}
 
-        const qreal textY = iconVisible ? c.y() + icon * 0.42 : cell.center().y() - side * 0.07;
-        QRectF textRect(cell.left() + 4, textY, cell.width() - 8, side * 0.18);
-        p.drawText(textRect, Qt::AlignHCenter | Qt::AlignVCenter, scaleText);
-    }
+void PlaybackOverlayWidget::drawTextOverlay(QPainter& p, const QRectF& rawCell, const QString& text, int opacity)
+{
+    if (text.isEmpty())
+        return;
+
+    p.save();
+    p.setOpacity(qBound(0, opacity, 100) / 100.0);
+
+    const QRectF cell = rawCell.adjusted(10, 10, -10, -10);
+    const qreal side = qMin(cell.width(), cell.height());
+    QFont font = p.font();
+    font.setBold(true);
+    font.setPointSizeF(qBound(11.0, side * 0.16, 28.0));
+    p.setFont(font);
+    QFontMetricsF fm(font);
+
+    const qreal textW = qMin(cell.width(), fm.horizontalAdvance(text) + 26.0);
+    const qreal textH = fm.height() + 12.0;
+    const QRectF bg(cell.center().x() - textW / 2.0, cell.center().y() - textH / 2.0, textW, textH);
+
+    p.setPen(Qt::NoPen);
+    p.setBrush(QColor(0, 0, 0, 145));
+    p.drawRoundedRect(bg, 8, 8);
+    p.setPen(QColor(255, 255, 255, 235));
+    p.drawText(bg, Qt::AlignHCenter | Qt::AlignVCenter, text);
 
     p.restore();
 }
@@ -223,6 +310,7 @@ void PlaybackOverlayWidget::drawVisibilityMap(QPainter& p, const QRectF& rawCell
         return;
 
     p.save();
+    p.setOpacity(visibilityMapOpacity / 100.0);
 
     QFont font = p.font();
     font.setBold(false);
@@ -235,8 +323,10 @@ void PlaybackOverlayWidget::drawVisibilityMap(QPainter& p, const QRectF& rawCell
     QRectF sourceRect(cell.left(), cell.top(), cell.width(), textH);
     QRectF actualRect(cell.left(), cell.bottom() - textH, cell.width(), textH);
     QRectF mapArea(cell.left(), sourceRect.bottom() + gap, cell.width(), cell.height() - 2.0 * textH - 2.0 * gap);
-    if (mapArea.height() <= 8)
+    if (mapArea.height() <= 8) {
+        p.restore();
         return;
+    }
 
     p.setPen(QColor(255, 255, 255, 235));
     p.drawText(sourceRect, Qt::AlignHCenter | Qt::AlignVCenter, sourceText);
@@ -257,8 +347,6 @@ void PlaybackOverlayWidget::drawVisibilityMap(QPainter& p, const QRectF& rawCell
     const QRectF unionRect = viewportRect.united(videoRect);
 
     const qreal mapScale = qMin(mapArea.width() / unionRect.width(), mapArea.height() / unionRect.height());
-    const qreal mapW = unionRect.width() * mapScale;
-    const qreal mapH = unionRect.height() * mapScale;
     const QPointF mapCenter(mapArea.center());
 
     auto mapRect = [&](const QRectF& r) {
@@ -267,9 +355,6 @@ void PlaybackOverlayWidget::drawVisibilityMap(QPainter& p, const QRectF& rawCell
                       r.width() * mapScale,
                       r.height() * mapScale);
     };
-
-    Q_UNUSED(mapW);
-    Q_UNUSED(mapH);
 
     const QRectF redRect = mapRect(videoRect);
     const QRectF greenRect = mapRect(visibleRect);

@@ -37,6 +37,9 @@ public:
     void showPlaybackOverlay(bool paused);
     void showScaleOverlay();
     void showVolumeOverlay(double volume,bool muted);
+    void setOverlayCells(int playStateCell, int scaleDisplayCell, int volumeOverlayCell, int visibilityMapCell, int warpLabelCell);
+    void setOverlayOpacities(int playStateOpacity, int scaleDisplayOpacity, int volumeOverlayOpacity, int visibilityMapOpacity, int warpLabelOpacity);
+    void setOverlayProfiles(int persistentInfo, int playStateChange, int volumeChange, int warpMode, int scaleChange);
     void toggleInfoOverlay();
     void setWarpOverlay(bool active,int factor);
     void showWarpFeedback(int factor);
@@ -54,8 +57,12 @@ private:
     mpv_render_context*ctx=nullptr;
     QString cur;
     QWidget* playbackOverlay=nullptr;
+    int overlayCenterCell=5; int overlayScaleDisplayCell=8; int overlayVolumeCell=6; int overlayVisibilityMapCell=9; int overlayWarpLabelCell=3;
+    int overlayCenterOpacity=100; int overlayScaleDisplayOpacity=100; int overlayVolumeOpacity=100; int overlayVisibilityMapOpacity=100; int overlayWarpLabelOpacity=100; static constexpr int OverlayPlayState=1<<0; static constexpr int OverlayScaleDisplay=1<<1; static constexpr int OverlayVolume=1<<2; static constexpr int OverlayVisibilityMap=1<<3; static constexpr int OverlayWarpLabel=1<<4; static constexpr int OverlayAll=OverlayPlayState|OverlayScaleDisplay|OverlayVolume|OverlayVisibilityMap|OverlayWarpLabel; int overlayProfilePersistentInfo=OverlayAll; int overlayProfilePlayStateChange=OverlayPlayState|OverlayScaleDisplay; int overlayProfileVolumeChange=OverlayVolume; int overlayProfileWarpMode=OverlayWarpLabel; int overlayProfileScaleChange=OverlayScaleDisplay;
     bool infoOverlayPinned=false;
     bool playbackPaused=false;
+    double lastOverlayVolume=100.0;
+    bool lastOverlayMuted=false;
     qint64 videoDisplayWidth=0;
     qint64 videoDisplayHeight=0;
     double maxVideoScale=1.0;
@@ -64,5 +71,6 @@ private:
     void applyVideoScale();
     QString overlayScaleText()const;
     QString overlayDimensionsText()const;
+    QString overlayVolumeText()const;
     QSize overlayRenderedVideoSize()const;
 };

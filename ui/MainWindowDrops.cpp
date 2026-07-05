@@ -82,7 +82,7 @@ void MainWindow::addDroppedPaths(const QStringList&paths){
         QFileInfo info(p);
         if(info.isDir()){
             const QStringList files=recursiveVideoFilesInFolder(info.absoluteFilePath());
-            auto added=playlistModel->addFolderGroup(files);
+            auto added=playlistModel->addFolderGroup(files, info.absoluteFilePath());
             for(auto&a:added){metadataProbe->enqueue(a);thumbnailManager->enqueue(a);}
             any=any||!added.isEmpty();
         }else if(isVideoPlaylistFile(info)){
