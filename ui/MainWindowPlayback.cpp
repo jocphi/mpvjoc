@@ -27,6 +27,7 @@
 #include <QSet>
 #include <QList>
 #include <QPair>
+#include "Version.h"
 
 void MainWindow::setPlaylistKeyboardFocus(bool focus){
     playlistKeyboardFocus=focus;
@@ -447,7 +448,33 @@ void MainWindow::openSettingsDialog()
     rootLayout->addWidget(playlistGroup);
     rootLayout->addStretch(1);
 
-    auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
+    
+    auto* aboutGroup = new QGroupBox(QStringLiteral("About"), &dialog);
+    auto* aboutLayout = new QFormLayout(aboutGroup);
+    aboutLayout->setLabelAlignment(Qt::AlignRight);
+
+    auto makeAboutLabel = [&](const QString& text) {
+        auto* label = new QLabel(text, aboutGroup);
+        label->setTextInteractionFlags(Qt::TextSelectableByMouse);
+        label->setWordWrap(true);
+        return label;
+    };
+
+    aboutLayout->addRow(QStringLiteral("Version"), makeAboutLabel(QString::fromLatin1(MPVJOC_VERSION)));
+    aboutLayout->addRow(QStringLiteral("Build"), makeAboutLabel(
+        QStringLiteral("%1-%2").arg(QString::fromLatin1(MPVJOC_GIT_COMMIT_COUNT), QString::fromLatin1(MPVJOC_GIT_HASH))));
+    aboutLayout->addRow(QStringLiteral("Git"), makeAboutLabel(QString::fromLatin1(MPVJOC_GIT_DESCRIBE)));
+    aboutLayout->addRow(QStringLiteral("State"), makeAboutLabel(QString::fromLatin1(MPVJOC_GIT_DIRTY)));
+    aboutLayout->addRow(QStringLiteral("Build type"), makeAboutLabel(QString::fromLatin1(MPVJOC_BUILD_TYPE).isEmpty()
+            ? QStringLiteral("default")
+            : QString::fromLatin1(MPVJOC_BUILD_TYPE)));
+    aboutLayout->addRow(QStringLiteral("AI use"), makeAboutLabel(QStringLiteral(
+        "This project has been developed with AI-assisted coding support. "
+        "All generated or suggested changes are reviewed, tested, and accepted by the project maintainer.")));
+
+    rootLayout->addWidget(aboutGroup);
+
+auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
     QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
     rootLayout->addWidget(buttons);
