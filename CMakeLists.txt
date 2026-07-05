@@ -14,7 +14,9 @@ add_executable(mpvjoc
     util/Utils.cpp
     util/TextHighlighting.cpp
     mpv/MpvWidget.cpp
+    mpv/PlaybackOverlayWidget.cpp
     playlist/PlaylistModel.cpp
+    playlist/PlaylistFilterProxyModel.cpp
     playlist/PlaylistDelegate.cpp
     playlist/PlaylistFormatting.cpp
     playlist/PlaylistBadges.cpp
@@ -23,6 +25,15 @@ add_executable(mpvjoc
     media/ThumbnailManager.cpp
     ui/TimelineWidget.cpp
     ui/MainWindow.cpp
+    ui/MainWindowShortcuts.cpp
+    ui/MainWindowDrops.cpp
+    ui/MainWindowState.cpp
+    ui/MainWindowPlaylist.cpp
+    ui/MainWindowPlayback.cpp
+    ui/MainWindowMove.cpp
+    ui/MainWindowMedia.cpp
+    ui/MainWindowFileActions.cpp
+    ui/MainWindowUi.cpp
 )
 
 target_include_directories(mpvjoc PRIVATE
@@ -39,3 +50,22 @@ target_link_libraries(mpvjoc PRIVATE
     Qt6::OpenGLWidgets
     PkgConfig::MPV
 )
+
+# Development helper: audit shortcuts documented in the F12 help overlay.
+# This target is explicit-only; it is not part of the normal build.
+add_custom_target(audit-shortcut-help
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/audit_shortcut_help.py --context 140
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Auditing shortcut help coverage"
+    VERBATIM
+)
+
+# Development helper: strict shortcut help audit. This target fails when possible
+# missing F12 help entries are found.
+add_custom_target(audit-shortcut-help-strict
+    COMMAND python3 ${CMAKE_SOURCE_DIR}/tools/audit_shortcut_help.py --strict --context 140
+    WORKING_DIRECTORY ${CMAKE_SOURCE_DIR}
+    COMMENT "Auditing shortcut help coverage in strict mode"
+    VERBATIM
+)
+

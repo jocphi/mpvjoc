@@ -55,9 +55,12 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
 {
     p->save();
     QRect r = o.rect;
+    bool reviewed = i.data(PlaylistModel::ReviewedRole).toBool();
     p->fillRect(r,
         (o.state & QStyle::State_Selected) ? QColor(38, 82, 48)
                                            : (i.row() % 2 ? QColor(36, 36, 36) : QColor(24, 24, 24)));
+    if (reviewed)
+        p->fillRect(r, QColor(0, 0, 0, 48));
     QRect th(r.left() + 8, r.top() + 6, 96, 54);
     p->fillRect(th, QColor(8, 8, 8));
     p->setPen(QColor(60, 60, 60));
@@ -97,6 +100,16 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     }
     QRect titleRect(x, r.top() + 7, r.width() - x + r.left() - 90, 20);
     drawHighlightedTitle(p, titleRect, title);
+    if (reviewed) {
+        QString reviewedText = QStringLiteral("reviewed");
+        int reviewedW = p->fontMetrics().horizontalAdvance(reviewedText) + 14;
+        QRect reviewedBadgeRect(r.right() - 86 - reviewedW - 8, r.top() + 8, reviewedW, 18);
+        p->setPen(Qt::NoPen);
+        p->setBrush(QColor(80, 120, 90));
+        p->drawRoundedRect(reviewedBadgeRect, 3, 3);
+        p->setPen(Qt::white);
+        p->drawText(reviewedBadgeRect, Qt::AlignCenter, reviewedText);
+    }
     QRect durationRect(r.right() - 86, r.top() + 7, 78, 20);
     const DuplicateDurationRunInfo duplicateRun = duplicateDurationRunInfo(i, dk, dur);
     if (duplicateRun.isDuplicate) {
@@ -150,5 +163,40 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     p->setPen(QColor(130, 130, 130));
     p->drawText(QRect(x, r.top() + 52, r.right() - x - 8, 18), Qt::AlignVCenter,
         p->fontMetrics().elidedText(i.data(PlaylistModel::PathRole).toString(), Qt::ElideMiddle, r.right() - x - 8));
+    if(i.data(PlaylistModel::FolderDropGroupRole).toBool()){
+        const bool first=i.data(PlaylistModel::FolderDropGroupFirstRole).toBool();
+        const bool last=i.data(PlaylistModel::FolderDropGroupLastRole).toBool();
+        QRect gr=r.adjusted(2,1,-3,-1);
+        QPen pen(QColor(205,150,0),2);
+        p->setPen(pen);
+        if(first)p->drawLine(gr.topLeft(),gr.topRight());
+        if(last)p->drawLine(gr.bottomLeft(),gr.bottomRight());
+        p->drawLine(gr.topLeft(),gr.bottomLeft());
+        p->drawLine(gr.topRight(),gr.bottomRight());
+    }
+    if(dk){
+        auto sameDurationAt=[&](int row){
+            if(!i.model()||row<0||row>=i.model()->rowCount())return false;
+            QModelIndex other=i.model()->index(row,0);
+            if(!other.data(PlaylistModel::DurationKnownRole).toBool())return false;
+            double otherDur=other.data(PlaylistModel::DurationRole).toDouble();
+            return qAbs(qRound64(otherDur)-qRound64(dur))==0;
+        };
+        const bool samePrev=sameDurationAt(i.row()-1);
+        const bool sameNext=sameDurationAt(i.row()+1);
+        if(samePrev||sameNext){
+            QRect linkRect=durationRect.adjusted(-3,0,3,0);
+            int yTop=samePrev?r.top():linkRect.top();
+            int yBottom=sameNext?r.bottom():linkRect.bottom();
+            QPen linkPen(QColor(255,0,0),2);
+            linkPen.setCosmetic(true);
+            p->setPen(linkPen);
+            p->setBrush(Qt::NoBrush);
+            p->drawLine(QPoint(linkRect.left(),yTop),QPoint(linkRect.left(),yBottom));
+            p->drawLine(QPoint(linkRect.right(),yTop),QPoint(linkRect.right(),yBottom));
+            if(!samePrev)p->drawLine(QPoint(linkRect.left(),linkRect.top()),QPoint(linkRect.right(),linkRect.top()));
+            if(!sameNext)p->drawLine(QPoint(linkRect.left(),linkRect.bottom()),QPoint(linkRect.right(),linkRect.bottom()));
+        }
+    }
     p->restore();
 }
