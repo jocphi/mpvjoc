@@ -18,6 +18,8 @@
 #include <QTimer>
 #include <QUrl>
 #include <QtGlobal>
+#include "playlist/PlaylistFormatting.h"
+#include <QSettings>
 
 void MainWindow::addFiles(const QStringList&files){bool empty=playlistModel->count()==0; auto added=playlistModel->addFiles(files); for(auto&p:added){metadataProbe->enqueue(p);thumbnailManager->enqueue(p);} if(empty&&playlistModel->count()>0)playPlaylistRow(0); savePlaylistState();}
 
@@ -44,31 +46,79 @@ void MainWindow::ensureVisiblePlaylistSelection(){
     if(current.isValid())return;
     if(playlistModel->count()>0)playlistView->setCurrentIndex(playlistModel->index(0,0));
 }
-void MainWindow::updatePlaylistSummary(){
-    if(!playlistModel||!playlistSummaryLabel)return;
-    qint64 totalBytes=0;
-    double totalDuration=0;
-    const int totalCount=playlistModel->count();
-    int visibleCount=totalCount;
-    const bool filtered=playlistProxyModel&&!playlistProxyModel->filterText().isEmpty();
-    if(filtered){
-        visibleCount=playlistProxyModel->rowCount();
-        for(int r=0;r<visibleCount;++r){
-            QModelIndex proxyIdx=playlistProxyModel->index(r,0);
-            QModelIndex idx=playlistProxyModel->mapToSource(proxyIdx);
-            totalBytes+=idx.data(PlaylistModel::SizeRole).toLongLong();
-            if(idx.data(PlaylistModel::DurationKnownRole).toBool())totalDuration+=idx.data(PlaylistModel::DurationRole).toDouble();
+void MainWindow::updatePlaylistSummary()
+{
+    if (!playlistSummaryLabel || !playlistModel)
+        return;
+
+    const PlaylistSizeUnit summarySizeUnit = playlistSizeUnitFromInt(
+        QSettings().value(QStringLiteral("playlist/sizeUnit"), 2).toInt());
+
+    const int sourceTotalCount = playlistModel->count();
+    const bool hasProxy = playlistProxyModel != nullptr;
+    const int visibleCount = hasProxy ? playlistProxyModel->rowCount() : sourceTotalCount;
+    const bool filtered = hasProxy && visibleCount != sourceTotalCount;
+
+    auto sourceIndexForVisibleRow = [this, hasProxy](int row) -> QModelIndex {
+        if (hasProxy) {
+            const QModelIndex proxyIndex = playlistProxyModel->index(row, 0);
+            return playlistProxyModel->mapToSource(proxyIndex);
         }
-    }else{
-        for(int r=0;r<totalCount;++r){
-            QModelIndex idx=playlistModel->index(r,0);
-            totalBytes+=idx.data(PlaylistModel::SizeRole).toLongLong();
-            if(idx.data(PlaylistModel::DurationKnownRole).toBool())totalDuration+=idx.data(PlaylistModel::DurationRole).toDouble();
+        return playlistModel->index(row, 0);
+    };
+
+    qint64 totalBytes = 0;
+    double totalDuration = 0.0;
+
+    for (int r = 0; r < visibleCount; ++r) {
+        const QModelIndex idx = sourceIndexForVisibleRow(r);
+        if (!idx.isValid())
+            continue;
+        totalBytes += idx.data(PlaylistModel::SizeRole).toLongLong();
+        if (idx.data(PlaylistModel::DurationKnownRole).toBool())
+            totalDuration += idx.data(PlaylistModel::DurationRole).toDouble();
+    }
+
+    const int sourceRow = currentRow();
+    QModelIndex currentSourceIndex;
+    int currentDisplayRow = -1;
+
+    if (sourceRow >= 0 && sourceRow < sourceTotalCount) {
+        currentSourceIndex = playlistModel->index(sourceRow, 0);
+        if (hasProxy) {
+            const QModelIndex proxyIndex = playlistProxyModel->mapFromSource(currentSourceIndex);
+            if (proxyIndex.isValid())
+                currentDisplayRow = proxyIndex.row();
+        } else {
+            currentDisplayRow = sourceRow;
         }
     }
-    const QString countText=filtered?QString("%1/%2 files").arg(visibleCount).arg(totalCount):QString("%1 files").arg(totalCount);
-    playlistSummaryLabel->setText(QString("%1  •  %2  •  %3").arg(countText).arg(formatBytes(totalBytes)).arg(formatHMS(totalDuration)));
+
+    QString filesText;
+    if (currentSourceIndex.isValid() && currentDisplayRow >= 0 && visibleCount > 0)
+        filesText = QStringLiteral("%1/%2 files").arg(currentDisplayRow + 1).arg(visibleCount);
+    else if (filtered)
+        filesText = QStringLiteral("%1/%2 files").arg(visibleCount).arg(sourceTotalCount);
+    else
+        filesText = QStringLiteral("%1 files").arg(sourceTotalCount);
+
+    QString sizeText = formatEuroSize(totalBytes, summarySizeUnit);
+    QString durationText = formatHMS(totalDuration);
+
+    if (currentSourceIndex.isValid()) {
+        const qint64 currentBytes = currentSourceIndex.data(PlaylistModel::SizeRole).toLongLong();
+        const bool currentDurationKnown = currentSourceIndex.data(PlaylistModel::DurationKnownRole).toBool();
+        const double currentDuration = currentSourceIndex.data(PlaylistModel::DurationRole).toDouble();
+
+        sizeText = QStringLiteral("%1 / %2").arg(formatEuroSize(currentBytes, summarySizeUnit), formatEuroSize(totalBytes, summarySizeUnit));
+        durationText = QStringLiteral("%1 / %2")
+                           .arg(currentDurationKnown ? formatHMS(currentDuration) : QStringLiteral("--:--:--"),
+                               formatHMS(totalDuration));
+    }
+
+    playlistSummaryLabel->setText(QStringLiteral("%1  •  %2  •  %3").arg(filesText, sizeText, durationText));
 }
+
 void MainWindow::playNextPlaylistFile(){if(playlistModel->count()<=0)return; int r=currentRow(); if(r<0)r=0; r=(r+1)%playlistModel->count(); playPlaylistRow(r);}
 
 void MainWindow::playPreviousPlaylistFile(){if(playlistModel->count()<=0)return; int r=currentRow(); if(r<0)r=0; r=(r-1+playlistModel->count())%playlistModel->count(); playPlaylistRow(r);}

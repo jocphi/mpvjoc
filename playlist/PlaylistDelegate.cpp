@@ -17,8 +17,41 @@
 #include <QStyleOptionViewItem>
 #include <QTextStream>
 #include <QtGlobal>
+#include <QSettings>
+#include <QSortFilterProxyModel>
 
-static bool gPlaylistSizeDisplayGB = false;
+static PlaylistSizeUnit gPlaylistSizeUnit = PlaylistSizeUnit::Megabytes;
+static bool gPlaylistSizeUnitLoaded = false;
+
+static PlaylistSizeUnit currentPlaylistSizeUnit()
+{
+    if (!gPlaylistSizeUnitLoaded) {
+        gPlaylistSizeUnit = playlistSizeUnitFromInt(QSettings().value(QStringLiteral("playlist/sizeUnit"), 2).toInt());
+        gPlaylistSizeUnitLoaded = true;
+    }
+    return gPlaylistSizeUnit;
+}
+
+static void setCurrentPlaylistSizeUnit(PlaylistSizeUnit unit)
+{
+    gPlaylistSizeUnit = unit;
+    gPlaylistSizeUnitLoaded = true;
+    QSettings().setValue(QStringLiteral("playlist/sizeUnit"), playlistSizeUnitToInt(gPlaylistSizeUnit));
+}
+
+static void emitAllPlaylistRowsChanged(QAbstractItemModel* model)
+{
+    if (!model || model->rowCount() <= 0)
+        return;
+
+    emit model->dataChanged(model->index(0, 0), model->index(model->rowCount() - 1, 0));
+
+    if (auto* proxy = qobject_cast<QSortFilterProxyModel*>(model)) {
+        QAbstractItemModel* source = proxy->sourceModel();
+        if (source && source->rowCount() > 0)
+            emit source->dataChanged(source->index(0, 0), source->index(source->rowCount() - 1, 0));
+    }
+}
 bool PlaylistDelegate::editorEvent(
     QEvent* event, QAbstractItemModel* model, const QStyleOptionViewItem& o, const QModelIndex& i)
 {
@@ -29,14 +62,12 @@ bool PlaylistDelegate::editorEvent(
             int lineH = 18;
             int rightPad = 8;
             int sizeW = o.fontMetrics.horizontalAdvance(
-                            gPlaylistSizeDisplayGB ? QStringLiteral("000.000,00 GB") : QStringLiteral("000.000,00 MB"))
+                            playlistSizeWidthSample(currentPlaylistSizeUnit()))
                 + 6;
             QRect sizeRect(o.rect.right() - rightPad - sizeW, metaY, sizeW, lineH);
             if (sizeRect.contains(me->position().toPoint())) {
-                gPlaylistSizeDisplayGB = !gPlaylistSizeDisplayGB;
-                if (model && model->rowCount() > 0)
-                    emit const_cast<QAbstractItemModel*>(model)->dataChanged(
-                        model->index(0, 0), model->index(model->rowCount() - 1, 0));
+                setCurrentPlaylistSizeUnit(nextPlaylistSizeUnit(currentPlaylistSizeUnit()));
+                emitAllPlaylistRowsChanged(model);
                 return true;
             }
         }
@@ -83,7 +114,7 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     QString res = i.data(PlaylistModel::ResolutionRole).toString();
     QString cont = i.data(PlaylistModel::ContainerRole).toString();
     qint64 sizeBytes = i.data(PlaylistModel::SizeRole).toLongLong();
-    QString sizeText = formatEuroSize(sizeBytes, gPlaylistSizeDisplayGB);
+    QString sizeText = formatEuroSize(sizeBytes, currentPlaylistSizeUnit());
     QString meta = QStringList { res, cont }.join("  •  ");
     QString heightBadge;
     QColor heightColor(80, 80, 80);
@@ -123,7 +154,7 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     int lineH = 18;
     int rightPad = 8;
     int sizeW = p->fontMetrics().horizontalAdvance(
-                    gPlaylistSizeDisplayGB ? QStringLiteral("000.000,00 GB") : QStringLiteral("000.000,00 MB"))
+                    playlistSizeWidthSample(currentPlaylistSizeUnit()))
         + 6;
     QRect sizeRect(r.right() - rightPad - sizeW, metaY, sizeW, lineH);
     int heightBadgeW = 0;
