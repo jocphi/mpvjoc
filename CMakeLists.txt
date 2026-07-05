@@ -1,6 +1,50 @@
 cmake_minimum_required(VERSION 3.20)
 project(mpvjoc LANGUAGES CXX)
 
+
+set(MPVJOC_VERSION "0.9.0" CACHE STRING "mpvjoc semantic version")
+
+find_package(Git QUIET)
+if(GIT_FOUND AND EXISTS "${CMAKE_CURRENT_SOURCE_DIR}/.git")
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-list --count HEAD
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE MPVJOC_GIT_COMMIT_COUNT
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" rev-parse --short HEAD
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE MPVJOC_GIT_HASH
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" describe --tags --always --dirty
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        OUTPUT_VARIABLE MPVJOC_GIT_DESCRIBE
+        OUTPUT_STRIP_TRAILING_WHITESPACE
+        ERROR_QUIET)
+    execute_process(
+        COMMAND "${GIT_EXECUTABLE}" diff --quiet
+        WORKING_DIRECTORY "${CMAKE_CURRENT_SOURCE_DIR}"
+        RESULT_VARIABLE MPVJOC_GIT_DIRTY_RESULT
+        ERROR_QUIET)
+    if(MPVJOC_GIT_DIRTY_RESULT EQUAL 0)
+        set(MPVJOC_GIT_DIRTY "clean")
+    else()
+        set(MPVJOC_GIT_DIRTY "dirty")
+    endif()
+else()
+    set(MPVJOC_GIT_COMMIT_COUNT "0")
+    set(MPVJOC_GIT_HASH "unknown")
+    set(MPVJOC_GIT_DESCRIBE "unknown")
+    set(MPVJOC_GIT_DIRTY "unknown")
+endif()
+
+configure_file(
+    "${CMAKE_CURRENT_SOURCE_DIR}/cmake/Version.h.in"
+    "${CMAKE_CURRENT_BINARY_DIR}/generated/Version.h"
+    @ONLY)
 set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
@@ -36,6 +80,7 @@ add_executable(mpvjoc
     ui/MainWindowUi.cpp
 )
 
+target_include_directories(mpvjoc PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
 target_include_directories(mpvjoc PRIVATE
     ${CMAKE_CURRENT_SOURCE_DIR}
     ${CMAKE_CURRENT_SOURCE_DIR}/util
