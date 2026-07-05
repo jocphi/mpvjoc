@@ -19,6 +19,7 @@ public:
     std::function<void()> onEndFile;
     void loadFile(const QString&p);
     void stopPlayback();
+    void setIdleLogoPath(const QString& path);
     QString currentFilePath()const;
     void togglePause();
     void setPause(bool paused);
@@ -57,6 +58,8 @@ private:
     mpv_render_context*ctx=nullptr;
     QString cur;
     QWidget* playbackOverlay=nullptr;
+    QWidget* idleLogoOverlay=nullptr;
+    QString idleLogoPath;
     int overlayCenterCell=5; int overlayScaleDisplayCell=8; int overlayVolumeCell=6; int overlayVisibilityMapCell=9; int overlayWarpLabelCell=3;
     int overlayCenterOpacity=100; int overlayScaleDisplayOpacity=100; int overlayVolumeOpacity=100; int overlayVisibilityMapOpacity=100; int overlayWarpLabelOpacity=100; static constexpr int OverlayPlayState=1<<0; static constexpr int OverlayScaleDisplay=1<<1; static constexpr int OverlayVolume=1<<2; static constexpr int OverlayVisibilityMap=1<<3; static constexpr int OverlayWarpLabel=1<<4; static constexpr int OverlayAll=OverlayPlayState|OverlayScaleDisplay|OverlayVolume|OverlayVisibilityMap|OverlayWarpLabel; int overlayProfilePersistentInfo=OverlayAll; int overlayProfilePlayStateChange=OverlayPlayState|OverlayScaleDisplay; int overlayProfileVolumeChange=OverlayVolume; int overlayProfileWarpMode=OverlayWarpLabel; int overlayProfileScaleChange=OverlayScaleDisplay;
     bool infoOverlayPinned=false;
@@ -69,6 +72,9 @@ private:
     bool clipVideoToScale=true;
     double effectiveVideoScale()const;
     void applyVideoScale();
+    QString resolvedIdleLogoPath()const;
+    void ensureIdleLogoOverlay();
+    void updateIdleLogoOverlay();
     QString overlayScaleText()const;
     QString overlayDimensionsText()const;
     QString overlayVolumeText()const;
