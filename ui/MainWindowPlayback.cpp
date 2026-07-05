@@ -28,7 +28,155 @@
 #include <QList>
 #include <QPair>
 #include "Version.h"
+#include <QEventLoop>
+#include <QShortcut>
+#include <QKeySequence>
+#include <QScrollArea>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QPen>
 
+namespace {
+class ResizableSettingsPanel : public QFrame {
+public:
+    explicit ResizableSettingsPanel(QWidget* parent = nullptr)
+        : QFrame(parent)
+    {
+        setMouseTracking(true);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton && gripRect().contains(event->pos())) {
+            resizing = true;
+            resizeStartGlobal = event->globalPosition().toPoint();
+            resizeStartSize = size();
+            event->accept();
+            return;
+        }
+
+        if (event->button() == Qt::LeftButton && dragRect().contains(event->pos())) {
+            moving = true;
+            moveStartGlobal = event->globalPosition().toPoint();
+            moveStartPos = pos();
+            setCursor(Qt::SizeAllCursor);
+            event->accept();
+            return;
+        }
+
+        QFrame::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        if (resizing) {
+            const QPoint delta = event->globalPosition().toPoint() - resizeStartGlobal;
+            QSize requested(resizeStartSize.width() + delta.x(), resizeStartSize.height() + delta.y());
+            requested = requested.expandedTo(minimumSize());
+            if (parentWidget())
+                requested = requested.boundedTo(parentWidget()->size() - QSize(24, 24));
+            resize(requested);
+            event->accept();
+            return;
+        }
+
+        if (moving) {
+            const QPoint delta = event->globalPosition().toPoint() - moveStartGlobal;
+            move(boundedPanelPosition(moveStartPos + delta));
+            event->accept();
+            return;
+        }
+
+        if (gripRect().contains(event->pos()))
+            setCursor(Qt::SizeFDiagCursor);
+        else if (dragRect().contains(event->pos()))
+            setCursor(Qt::SizeAllCursor);
+        else
+            setCursor(Qt::ArrowCursor);
+
+        QFrame::mouseMoveEvent(event);
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        if ((resizing || moving) && event->button() == Qt::LeftButton) {
+            resizing = false;
+            moving = false;
+            if (gripRect().contains(event->pos()))
+                setCursor(Qt::SizeFDiagCursor);
+            else if (dragRect().contains(event->pos()))
+                setCursor(Qt::SizeAllCursor);
+            else
+                unsetCursor();
+            event->accept();
+            return;
+        }
+        QFrame::mouseReleaseEvent(event);
+    }
+
+    void leaveEvent(QEvent* event) override
+    {
+        if (!resizing && !moving)
+            unsetCursor();
+        QFrame::leaveEvent(event);
+    }
+
+    void paintEvent(QPaintEvent* event) override
+    {
+        QFrame::paintEvent(event);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        // Subtle title drag hint line.
+        painter.setPen(QPen(QColor(90, 90, 90), 1));
+        painter.drawLine(12, 42, width() - 12, 42);
+
+        // Lower-right resize grip.
+        painter.setPen(QPen(QColor(150, 150, 150), 1));
+        const int right = width() - 10;
+        const int bottom = height() - 10;
+        painter.drawLine(right - 18, bottom, right, bottom - 18);
+        painter.drawLine(right - 12, bottom, right, bottom - 12);
+        painter.drawLine(right - 6, bottom, right, bottom - 6);
+    }
+
+private:
+    QRect gripRect() const
+    {
+        return QRect(width() - 28, height() - 28, 28, 28);
+    }
+
+    QRect dragRect() const
+    {
+        return QRect(0, 0, width(), 44);
+    }
+
+    QPoint boundedPanelPosition(const QPoint& requested) const
+    {
+        if (!parentWidget())
+            return requested;
+
+        const QSize parentSize = parentWidget()->size();
+        const int margin = 12;
+        const int minX = margin - width();
+        const int minY = margin - height();
+        const int maxX = parentSize.width() - margin;
+        const int maxY = parentSize.height() - margin;
+
+        // Keep at least a small part of the panel visible so it cannot be lost.
+        return QPoint(qBound(minX, requested.x(), maxX), qBound(minY, requested.y(), maxY));
+    }
+
+    bool resizing = false;
+    bool moving = false;
+    QPoint resizeStartGlobal;
+    QSize resizeStartSize;
+    QPoint moveStartGlobal;
+    QPoint moveStartPos;
+};
+}
 void MainWindow::setPlaylistKeyboardFocus(bool focus){
     playlistKeyboardFocus=focus;
     if(focus){if(playlistView)playlistView->setFocus(Qt::TabFocusReason);}else{if(mpvWidget)mpvWidget->setFocus(Qt::TabFocusReason);} if(timeline)timeline->setPlaylistFocusMode(playlistKeyboardFocus);
@@ -192,13 +340,86 @@ void MainWindow::applyOverlayProfileSettings()
 
 void MainWindow::openSettingsDialog()
 {
-    QDialog dialog(this);
-    dialog.setWindowTitle(QStringLiteral("mpvjoc Settings"));
-    dialog.setModal(true);
+    QWidget* host = window();
+    if (!host)
+        return;
+
+    QWidget overlay(host);
+    overlay.setObjectName(QStringLiteral("settingsOverlay"));
+    overlay.setAttribute(Qt::WA_StyledBackground, true);
+    overlay.setFocusPolicy(Qt::StrongFocus);
+    overlay.setGeometry(host->rect());
+    overlay.setStyleSheet(QStringLiteral(
+        "#settingsOverlay { background-color: rgba(0, 0, 0, 150); }"));
+
+    ResizableSettingsPanel dialog(&overlay);
+    dialog.setObjectName(QStringLiteral("settingsPanel"));
+    dialog.setFrameShape(QFrame::StyledPanel);
+    const QSize defaultSettingsPanelSize(qMin(1040, qMax(720, host->width() - 80)), qBound(640, host->height() - 80, 900));
+    dialog.setMinimumSize(720, 520);
+
+    QSettings settingsPanelSettings;
+    QSize rememberedSettingsPanelSize = settingsPanelSettings.value(QStringLiteral("settings/panelSize"), defaultSettingsPanelSize).toSize();
+    rememberedSettingsPanelSize = rememberedSettingsPanelSize.expandedTo(dialog.minimumSize());
+    rememberedSettingsPanelSize = rememberedSettingsPanelSize.boundedTo(host->size() - QSize(24, 24));
+    if (!rememberedSettingsPanelSize.isValid())
+        rememberedSettingsPanelSize = defaultSettingsPanelSize;
+    dialog.resize(rememberedSettingsPanelSize);
+
+    const bool hasRememberedSettingsPanelPos = settingsPanelSettings.contains(QStringLiteral("settings/panelPos"));
+    const QPoint rememberedSettingsPanelPos = settingsPanelSettings.value(QStringLiteral("settings/panelPos")).toPoint();
+    dialog.setToolTip(QStringLiteral("Drag the title area to move settings. Drag the lower-right corner to resize settings."));
+    dialog.setStyleSheet(QStringLiteral(
+        "#settingsPanel {"
+        "  background-color: rgb(32, 32, 32);"
+        "  border: 1px solid rgb(130, 130, 130);"
+        "  border-radius: 8px;"
+        "}"
+        "#settingsPanel QLabel { color: rgb(235, 235, 235); }"
+        "#settingsPanel QGroupBox { color: rgb(235, 235, 235); }"
+        "#settingsPanel QPushButton { padding: 4px 12px; }"));
+
+    auto boundedSettingsPanelPos = [&](const QPoint& requested) {
+        const int margin = 12;
+        const int minX = margin - dialog.width();
+        const int minY = margin - dialog.height();
+        const int maxX = overlay.width() - margin;
+        const int maxY = overlay.height() - margin;
+        return QPoint(qBound(minX, requested.x(), maxX), qBound(minY, requested.y(), maxY));
+    };
+
+    auto centerSettingsPanel = [&] {
+        overlay.setGeometry(host->rect());
+        const QPoint centered((overlay.width() - dialog.width()) / 2,
+            (overlay.height() - dialog.height()) / 2);
+        dialog.move(boundedSettingsPanelPos(hasRememberedSettingsPanelPos ? rememberedSettingsPanelPos : centered));
+    };
 
     auto* rootLayout = new QVBoxLayout(&dialog);
     rootLayout->setContentsMargins(10, 10, 10, 10);
-    rootLayout->setSpacing(10);
+    rootLayout->setSpacing(8);
+
+    auto* settingsTitle = new QLabel(QStringLiteral("mpvjoc Settings"), &dialog);
+    QFont settingsTitleFont = settingsTitle->font();
+    settingsTitleFont.setBold(true);
+    settingsTitleFont.setPointSizeF(settingsTitleFont.pointSizeF() + 2.0);
+    settingsTitle->setFont(settingsTitleFont);
+    settingsTitle->setAttribute(Qt::WA_TransparentForMouseEvents, true);
+    dialog.setToolTip(QStringLiteral("Drag the title area to move settings. Drag the lower-right corner to resize settings."));
+    rootLayout->addWidget(settingsTitle);
+
+
+    auto* settingsScroll = new QScrollArea(&dialog);
+    settingsScroll->setWidgetResizable(true);
+    settingsScroll->setFrameShape(QFrame::NoFrame);
+    settingsScroll->setHorizontalScrollBarPolicy(Qt::ScrollBarAlwaysOff);
+
+    auto* settingsContent = new QWidget(settingsScroll);
+    auto* settingsLayout = new QVBoxLayout(settingsContent);
+    settingsLayout->setContentsMargins(4, 4, 10, 4);
+    settingsLayout->setSpacing(14);
+    settingsScroll->setWidget(settingsContent);
+    rootLayout->addWidget(settingsScroll, 1);
 
     auto scaledColor = [](const QColor& base, int percent) {
         percent = qBound(0, percent, 100);
@@ -227,10 +448,11 @@ void MainWindow::openSettingsDialog()
     auto* timelineGroup = new QGroupBox(QStringLiteral("Timeline"), &dialog);
     auto* timelineLayout = new QFormLayout(timelineGroup);
     timelineLayout->setContentsMargins(10, 8, 10, 10);
-    timelineLayout->setSpacing(8);
+    timelineLayout->setSpacing(10);
 
     auto makeTimelineRow = [&](const QString& title, const QColor& baseColor, int currentPercent) {
         auto* row = new QWidget(timelineGroup);
+        row->setMinimumHeight(30);
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
         rowLayout->setSpacing(8);
@@ -259,12 +481,12 @@ void MainWindow::openSettingsDialog()
     auto* greenSpin = makeTimelineRow(QStringLiteral("Green/default dark tone"), QColor(0, 255, 0), timelineGreenDarkPercent);
     auto* greySpin = makeTimelineRow(QStringLiteral("Grey/playlist focus dark tone"), QColor(128, 128, 128), timelineGreyDarkPercent);
     auto* redSpin = makeTimelineRow(QStringLiteral("Red/Warp dark tone"), QColor(255, 0, 0), timelineRedDarkPercent);
-    rootLayout->addWidget(timelineGroup);
+    settingsLayout->addWidget(timelineGroup);
 
     auto* overlayGroup = new QGroupBox(QStringLiteral("Overlay layout"), &dialog);
     auto* overlayLayout = new QFormLayout(overlayGroup);
     overlayLayout->setContentsMargins(10, 8, 10, 10);
-    overlayLayout->setSpacing(8);
+    overlayLayout->setSpacing(11);
     auto* gridHint = new QLabel(QStringLiteral("Grid cells: 1 2 3 / 4 5 6 / 7 8 9"), overlayGroup);
     gridHint->setWordWrap(true);
     overlayLayout->addRow(QStringLiteral("Grid"), gridHint);
@@ -343,9 +565,10 @@ void MainWindow::openSettingsDialog()
     };
     auto makeOverlayRow = [&](QComboBox* cellCombo, QSpinBox* opacitySpin) {
         auto* row = new QWidget(overlayGroup);
+        row->setMinimumHeight(30);
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
-        rowLayout->setSpacing(8);
+        rowLayout->setSpacing(12);
         rowLayout->addWidget(new QLabel(QStringLiteral("cell"), row));
         rowLayout->addWidget(cellCombo);
         rowLayout->addSpacing(12);
@@ -365,23 +588,24 @@ void MainWindow::openSettingsDialog()
     overlayLayout->addRow(QStringLiteral("Volume overlay"), makeOverlayRow(volumeCellCombo, volumeOpacitySpin));
     overlayLayout->addRow(QStringLiteral("Visibility map"), makeOverlayRow(mapCellCombo, mapOpacitySpin));
     overlayLayout->addRow(QStringLiteral("Warp label"), makeOverlayRow(warpCellCombo, warpOpacitySpin));
-    rootLayout->addWidget(overlayGroup);
+    settingsLayout->addWidget(overlayGroup);
 
     auto* profilesGroup = new QGroupBox(QStringLiteral("Overlay profiles"), &dialog);
     auto* profilesLayout = new QVBoxLayout(profilesGroup);
     profilesLayout->setContentsMargins(10, 8, 10, 10);
-    profilesLayout->setSpacing(8);
+    profilesLayout->setSpacing(11);
     auto* profilesHint = new QLabel(QStringLiteral("Choose which overlay elements are shown for each overlay mode."), profilesGroup);
     profilesHint->setWordWrap(true);
     profilesLayout->addWidget(profilesHint);
 
     auto makeProfileRow = [&](const QString& title, int mask) {
         auto* row = new QWidget(profilesGroup);
+        row->setMinimumHeight(30);
         auto* rowLayout = new QHBoxLayout(row);
         rowLayout->setContentsMargins(0, 0, 0, 0);
-        rowLayout->setSpacing(8);
+        rowLayout->setSpacing(12);
         auto* titleLabel = new QLabel(title, row);
-        titleLabel->setMinimumWidth(135);
+        titleLabel->setMinimumWidth(160);
         rowLayout->addWidget(titleLabel);
         auto* play = new QCheckBox(QStringLiteral("Play"), row);
         auto* scale = new QCheckBox(QStringLiteral("Scale"), row);
@@ -412,7 +636,7 @@ void MainWindow::openSettingsDialog()
     profilesLayout->addWidget(volumeProfile.first);
     profilesLayout->addWidget(warpProfile.first);
     profilesLayout->addWidget(scaleProfile.first);
-    rootLayout->addWidget(profilesGroup);
+    settingsLayout->addWidget(profilesGroup);
 
     auto profileMask = [](const QList<QCheckBox*>& checks) {
         int mask = 0;
@@ -427,7 +651,7 @@ void MainWindow::openSettingsDialog()
     auto* playbackGroup = new QGroupBox(QStringLiteral("Playback"), &dialog);
     auto* playbackLayout = new QVBoxLayout(playbackGroup);
     playbackLayout->setContentsMargins(10, 8, 10, 10);
-    playbackLayout->setSpacing(6);
+    playbackLayout->setSpacing(9);
     auto* autoPlayCheck = new QCheckBox(QStringLiteral("Auto-play next playlist item"), playbackGroup);
     autoPlayCheck->setChecked(autoPlayNextEnabled);
     autoPlayCheck->setToolTip(QStringLiteral("When enabled, end-of-file advances to the next playlist item."));
@@ -436,17 +660,17 @@ void MainWindow::openSettingsDialog()
     clipCheck->setToolTip(QStringLiteral("When enabled, exact scale may clip video. When disabled, oversized video is scaled down to fit."));
     playbackLayout->addWidget(autoPlayCheck);
     playbackLayout->addWidget(clipCheck);
-    rootLayout->addWidget(playbackGroup);
+    settingsLayout->addWidget(playbackGroup);
 
     auto* playlistGroup = new QGroupBox(QStringLiteral("Playlist"), &dialog);
     auto* playlistLayout = new QVBoxLayout(playlistGroup);
     playlistLayout->setContentsMargins(10, 8, 10, 10);
-    playlistLayout->setSpacing(6);
+    playlistLayout->setSpacing(9);
     auto* searchHint = new QLabel(QStringLiteral("Search syntax: words are AND terms, prefix with - to exclude, use reviewed/watched/seen for reviewed rows."), playlistGroup);
     searchHint->setWordWrap(true);
     playlistLayout->addWidget(searchHint);
-    rootLayout->addWidget(playlistGroup);
-    rootLayout->addStretch(1);
+    settingsLayout->addWidget(playlistGroup);
+    settingsLayout->addStretch(1);
 
     
     auto* aboutGroup = new QGroupBox(QStringLiteral("About"), &dialog);
@@ -472,14 +696,41 @@ void MainWindow::openSettingsDialog()
         "This project has been developed with AI-assisted coding support. "
         "All generated or suggested changes are reviewed, tested, and accepted by the project maintainer.")));
 
-    rootLayout->addWidget(aboutGroup);
+    settingsLayout->addWidget(aboutGroup);
 
 auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, &dialog);
-    QObject::connect(buttons, &QDialogButtonBox::accepted, &dialog, &QDialog::accept);
-    QObject::connect(buttons, &QDialogButtonBox::rejected, &dialog, &QDialog::reject);
+    bool settingsAccepted = false;
+    QEventLoop settingsLoop;
+    QObject::connect(buttons, &QDialogButtonBox::accepted, &overlay, [&] { settingsAccepted = true; settingsLoop.quit(); });
+    QObject::connect(buttons, &QDialogButtonBox::rejected, &overlay, [&] { settingsAccepted = false; settingsLoop.quit(); });
     rootLayout->addWidget(buttons);
 
-    if (dialog.exec() == QDialog::Accepted) {
+    auto* returnShortcut = new QShortcut(QKeySequence(Qt::Key_Return), &overlay);
+    returnShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(returnShortcut, &QShortcut::activated, &overlay, [&] { settingsAccepted = true; settingsLoop.quit(); });
+
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), &overlay);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(enterShortcut, &QShortcut::activated, &overlay, [&] { settingsAccepted = true; settingsLoop.quit(); });
+
+    auto* escapeShortcut = new QShortcut(QKeySequence(Qt::Key_Escape), &overlay);
+    escapeShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(escapeShortcut, &QShortcut::activated, &overlay, [&] { settingsAccepted = false; settingsLoop.quit(); });
+
+    centerSettingsPanel();
+    overlay.show();
+    overlay.raise();
+    dialog.show();
+    dialog.raise();
+    dialog.setFocus(Qt::OtherFocusReason);
+    overlay.grabKeyboard();
+    settingsLoop.exec();
+    overlay.releaseKeyboard();
+    settingsPanelSettings.setValue(QStringLiteral("settings/panelSize"), dialog.size());
+    settingsPanelSettings.setValue(QStringLiteral("settings/panelPos"), dialog.pos());
+    overlay.hide();
+
+    if (settingsAccepted) {
         timelineGreenDarkPercent = greenSpin->value();
         timelineGreyDarkPercent = greySpin->value();
         timelineRedDarkPercent = redSpin->value();

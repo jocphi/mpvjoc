@@ -27,6 +27,15 @@
 #include <QGuiApplication>
 #include <QEventLoop>
 #include <QFrame>
+#include <QShortcut>
+#include <QKeySequence>
+#include <QTableWidget>
+#include <QHeaderView>
+#include <QMouseEvent>
+#include <QPainter>
+#include <QPaintEvent>
+#include <QPen>
+#include <QSettings>
 
 namespace {
 QPoint centeredDialogPos(const QDialog& dialog, const QSize& desiredSize)
@@ -141,8 +150,281 @@ QVector<FolderTrashEntry> folderEntriesRelativeToRoot(const QString& folderRoot)
 
 struct FolderTrashChoice {
     bool accepted = false;
+
+
+class MovableResizableTrashPanel : public QFrame {
+public:
+    explicit MovableResizableTrashPanel(QWidget* parent = nullptr)
+        : QFrame(parent)
+    {
+        setMouseTracking(true);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton && gripRect().contains(event->pos())) {
+            resizing = true;
+            resizeStartGlobal = event->globalPosition().toPoint();
+            resizeStartSize = size();
+            event->accept();
+            return;
+        }
+
+        if (event->button() == Qt::LeftButton && dragRect().contains(event->pos())) {
+            moving = true;
+            moveStartGlobal = event->globalPosition().toPoint();
+            moveStartPos = pos();
+            setCursor(Qt::SizeAllCursor);
+            event->accept();
+            return;
+        }
+
+        QFrame::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        if (resizing) {
+            const QPoint delta = event->globalPosition().toPoint() - resizeStartGlobal;
+            QSize requested(resizeStartSize.width() + delta.x(), resizeStartSize.height() + delta.y());
+            requested = requested.expandedTo(minimumSize());
+            if (parentWidget())
+                requested = requested.boundedTo(parentWidget()->size() - QSize(24, 24));
+            resize(requested);
+            event->accept();
+            return;
+        }
+
+        if (moving) {
+            const QPoint delta = event->globalPosition().toPoint() - moveStartGlobal;
+            move(boundedPanelPosition(moveStartPos + delta));
+            event->accept();
+            return;
+        }
+
+        if (gripRect().contains(event->pos()))
+            setCursor(Qt::SizeFDiagCursor);
+        else if (dragRect().contains(event->pos()))
+            setCursor(Qt::SizeAllCursor);
+        else
+            setCursor(Qt::ArrowCursor);
+
+        QFrame::mouseMoveEvent(event);
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        if ((resizing || moving) && event->button() == Qt::LeftButton) {
+            resizing = false;
+            moving = false;
+            if (gripRect().contains(event->pos()))
+                setCursor(Qt::SizeFDiagCursor);
+            else if (dragRect().contains(event->pos()))
+                setCursor(Qt::SizeAllCursor);
+            else
+                unsetCursor();
+            event->accept();
+            return;
+        }
+        QFrame::mouseReleaseEvent(event);
+    }
+
+    void leaveEvent(QEvent* event) override
+    {
+        if (!resizing && !moving)
+            unsetCursor();
+        QFrame::leaveEvent(event);
+    }
+
+    void paintEvent(QPaintEvent* event) override
+    {
+        QFrame::paintEvent(event);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        painter.setPen(QPen(QColor(90, 90, 90), 1));
+        painter.drawLine(12, 42, width() - 12, 42);
+
+        painter.setPen(QPen(QColor(150, 150, 150), 1));
+        const int right = width() - 10;
+        const int bottom = height() - 10;
+        painter.drawLine(right - 18, bottom, right, bottom - 18);
+        painter.drawLine(right - 12, bottom, right, bottom - 12);
+        painter.drawLine(right - 6, bottom, right, bottom - 6);
+    }
+
+private:
+    QRect gripRect() const
+    {
+        return QRect(width() - 28, height() - 28, 28, 28);
+    }
+
+    QRect dragRect() const
+    {
+        return QRect(0, 0, width(), 44);
+    }
+
+    QPoint boundedPanelPosition(const QPoint& requested) const
+    {
+        if (!parentWidget())
+            return requested;
+
+        const QSize parentSize = parentWidget()->size();
+        const int margin = 12;
+        const int minX = margin - width();
+        const int minY = margin - height();
+        const int maxX = parentSize.width() - margin;
+        const int maxY = parentSize.height() - margin;
+        return QPoint(qBound(minX, requested.x(), maxX), qBound(minY, requested.y(), maxY));
+    }
+
+    bool resizing = false;
+    bool moving = false;
+    QPoint resizeStartGlobal;
+    QSize resizeStartSize;
+    QPoint moveStartGlobal;
+    QPoint moveStartPos;
+};
+
     bool moveWholeFolder = false;
     QStringList selectedPaths;
+};
+
+
+class FolderTrashPanelWidget : public QFrame {
+public:
+    explicit FolderTrashPanelWidget(QWidget* parent = nullptr)
+        : QFrame(parent)
+    {
+        setMouseTracking(true);
+    }
+
+protected:
+    void mousePressEvent(QMouseEvent* event) override
+    {
+        if (event->button() == Qt::LeftButton && gripRect().contains(event->pos())) {
+            resizing = true;
+            resizeStartGlobal = event->globalPosition().toPoint();
+            resizeStartSize = size();
+            event->accept();
+            return;
+        }
+
+        if (event->button() == Qt::LeftButton && dragRect().contains(event->pos())) {
+            moving = true;
+            moveStartGlobal = event->globalPosition().toPoint();
+            moveStartPos = pos();
+            setCursor(Qt::SizeAllCursor);
+            event->accept();
+            return;
+        }
+
+        QFrame::mousePressEvent(event);
+    }
+
+    void mouseMoveEvent(QMouseEvent* event) override
+    {
+        if (resizing) {
+            const QPoint delta = event->globalPosition().toPoint() - resizeStartGlobal;
+            QSize requested(resizeStartSize.width() + delta.x(), resizeStartSize.height() + delta.y());
+            requested = requested.expandedTo(minimumSize());
+            if (parentWidget())
+                requested = requested.boundedTo(parentWidget()->size() - QSize(24, 24));
+            resize(requested);
+            event->accept();
+            return;
+        }
+
+        if (moving) {
+            const QPoint delta = event->globalPosition().toPoint() - moveStartGlobal;
+            move(boundedPanelPosition(moveStartPos + delta));
+            event->accept();
+            return;
+        }
+
+        if (gripRect().contains(event->pos()))
+            setCursor(Qt::SizeFDiagCursor);
+        else if (dragRect().contains(event->pos()))
+            setCursor(Qt::SizeAllCursor);
+        else
+            setCursor(Qt::ArrowCursor);
+
+        QFrame::mouseMoveEvent(event);
+    }
+
+    void mouseReleaseEvent(QMouseEvent* event) override
+    {
+        if ((resizing || moving) && event->button() == Qt::LeftButton) {
+            resizing = false;
+            moving = false;
+            if (gripRect().contains(event->pos()))
+                setCursor(Qt::SizeFDiagCursor);
+            else if (dragRect().contains(event->pos()))
+                setCursor(Qt::SizeAllCursor);
+            else
+                unsetCursor();
+            event->accept();
+            return;
+        }
+        QFrame::mouseReleaseEvent(event);
+    }
+
+    void leaveEvent(QEvent* event) override
+    {
+        if (!resizing && !moving)
+            unsetCursor();
+        QFrame::leaveEvent(event);
+    }
+
+    void paintEvent(QPaintEvent* event) override
+    {
+        QFrame::paintEvent(event);
+        QPainter painter(this);
+        painter.setRenderHint(QPainter::Antialiasing, true);
+
+        painter.setPen(QPen(QColor(90, 90, 90), 1));
+        painter.drawLine(12, 42, width() - 12, 42);
+
+        painter.setPen(QPen(QColor(150, 150, 150), 1));
+        const int right = width() - 10;
+        const int bottom = height() - 10;
+        painter.drawLine(right - 18, bottom, right, bottom - 18);
+        painter.drawLine(right - 12, bottom, right, bottom - 12);
+        painter.drawLine(right - 6, bottom, right, bottom - 6);
+    }
+
+private:
+    QRect gripRect() const
+    {
+        return QRect(width() - 28, height() - 28, 28, 28);
+    }
+
+    QRect dragRect() const
+    {
+        return QRect(0, 0, width(), 44);
+    }
+
+    QPoint boundedPanelPosition(const QPoint& requested) const
+    {
+        if (!parentWidget())
+            return requested;
+
+        const QSize parentSize = parentWidget()->size();
+        const int margin = 12;
+        const int minX = margin - width();
+        const int minY = margin - height();
+        const int maxX = parentSize.width() - margin;
+        const int maxY = parentSize.height() - margin;
+        return QPoint(qBound(minX, requested.x(), maxX), qBound(minY, requested.y(), maxY));
+    }
+
+    bool resizing = false;
+    bool moving = false;
+    QPoint resizeStartGlobal;
+    QSize resizeStartSize;
+    QPoint moveStartGlobal;
+    QPoint moveStartPos;
 };
 
 FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folderRoot, const QVector<FolderTrashEntry>& entries)
@@ -161,10 +443,21 @@ FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folde
     overlay.setStyleSheet(QStringLiteral(
         "#folderTrashOverlay { background-color: rgba(0, 0, 0, 150); }"));
 
-    auto* panel = new QFrame(&overlay);
+    auto* panel = new FolderTrashPanelWidget(&overlay);
     panel->setObjectName(QStringLiteral("folderTrashPanel"));
     panel->setFrameShape(QFrame::StyledPanel);
-    panel->setFixedSize(760, 520);
+    panel->setMinimumSize(680, 420);
+    QSettings trashPanelSettings;
+    const QSize defaultTrashPanelSize(820, 560);
+    QSize rememberedTrashPanelSize = trashPanelSettings.value(QStringLiteral("folderTrashPanel/size"), defaultTrashPanelSize).toSize();
+    rememberedTrashPanelSize = rememberedTrashPanelSize.expandedTo(panel->minimumSize());
+    rememberedTrashPanelSize = rememberedTrashPanelSize.boundedTo(host->size() - QSize(24, 24));
+    if (!rememberedTrashPanelSize.isValid())
+        rememberedTrashPanelSize = defaultTrashPanelSize;
+    panel->resize(rememberedTrashPanelSize);
+    const bool hasRememberedTrashPanelPos = trashPanelSettings.contains(QStringLiteral("folderTrashPanel/pos"));
+    const QPoint rememberedTrashPanelPos = trashPanelSettings.value(QStringLiteral("folderTrashPanel/pos")).toPoint();
+    panel->setToolTip(QStringLiteral("Drag the title area to move. Drag the lower-right corner to resize."));
     panel->setStyleSheet(QStringLiteral(
         "#folderTrashPanel {"
         "  background-color: rgb(32, 32, 32);"
@@ -172,17 +465,35 @@ FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folde
         "  border-radius: 8px;"
         "}"
         "#folderTrashPanel QLabel { color: rgb(235, 235, 235); }"
-        "#folderTrashPanel QListWidget {"
+        "#folderTrashPanel QTableWidget {"
         "  background-color: rgb(20, 20, 20);"
         "  color: rgb(235, 235, 235);"
         "  border: 1px solid rgb(85, 85, 85);"
+        "  gridline-color: rgb(55, 55, 55);"
+        "}"
+        "#folderTrashPanel QHeaderView::section {"
+        "  background-color: rgb(45, 45, 45);"
+        "  color: rgb(235, 235, 235);"
+        "  padding: 3px;"
+        "  border: 0px;"
+        "  border-right: 1px solid rgb(70, 70, 70);"
         "}"
         "#folderTrashPanel QPushButton { padding: 4px 12px; }"));
 
+    auto boundedTrashPanelPos = [&](const QPoint& requested) {
+        const int margin = 12;
+        const int minX = margin - panel->width();
+        const int minY = margin - panel->height();
+        const int maxX = overlay.width() - margin;
+        const int maxY = overlay.height() - margin;
+        return QPoint(qBound(minX, requested.x(), maxX), qBound(minY, requested.y(), maxY));
+    };
+
     auto centerPanel = [&] {
         overlay.setGeometry(host->rect());
-        panel->move((overlay.width() - panel->width()) / 2,
+        const QPoint centered((overlay.width() - panel->width()) / 2,
             (overlay.height() - panel->height()) / 2);
+        panel->move(boundedTrashPanelPos(hasRememberedTrashPanelPos ? rememberedTrashPanelPos : centered));
     };
 
     auto* layout = new QVBoxLayout(panel);
@@ -194,6 +505,7 @@ FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folde
     titleFont.setBold(true);
     titleFont.setPointSizeF(titleFont.pointSizeF() + 2.0);
     title->setFont(titleFont);
+    title->setAttribute(Qt::WA_TransparentForMouseEvents, true);
     layout->addWidget(title);
 
     auto* explanation = new QLabel(QStringLiteral(
@@ -207,16 +519,69 @@ FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folde
     folderLabel->setWordWrap(true);
     layout->addWidget(folderLabel);
 
-    auto* list = new QListWidget(panel);
-    list->setSelectionMode(QAbstractItemView::NoSelection);
-    for (const FolderTrashEntry& entry : entries) {
-        const QString label = QStringLiteral("%1    %2").arg(entry.relativePath, formatFolderTrashSize(entry.size));
-        auto* item = new QListWidgetItem(label, list);
-        item->setFlags(item->flags() | Qt::ItemIsUserCheckable);
-        item->setCheckState(Qt::Checked);
-        item->setData(Qt::UserRole, entry.absolutePath);
+    auto* table = new QTableWidget(panel);
+    table->setColumnCount(3);
+    table->setHorizontalHeaderLabels(QStringList { QStringLiteral(""), QStringLiteral("Filename"), QStringLiteral("Size") });
+    table->setRowCount(entries.size());
+    table->setSelectionMode(QAbstractItemView::NoSelection);
+    table->setEditTriggers(QAbstractItemView::NoEditTriggers);
+    table->setAlternatingRowColors(true);
+    table->verticalHeader()->setVisible(false);
+    table->horizontalHeader()->setStretchLastSection(false);
+    table->horizontalHeader()->setSectionResizeMode(0, QHeaderView::ResizeToContents);
+    table->horizontalHeader()->setSectionResizeMode(1, QHeaderView::Stretch);
+    table->horizontalHeader()->setSectionResizeMode(2, QHeaderView::ResizeToContents);
+
+    qint64 allBytes = 0;
+    for (int row = 0; row < entries.size(); ++row) {
+        const FolderTrashEntry& entry = entries[row];
+        allBytes += qMax<qint64>(0, entry.size);
+
+        auto* checkItem = new QTableWidgetItem;
+        checkItem->setFlags((checkItem->flags() | Qt::ItemIsUserCheckable) & ~Qt::ItemIsEditable);
+        checkItem->setCheckState(Qt::Checked);
+        checkItem->setTextAlignment(Qt::AlignCenter);
+        checkItem->setData(Qt::UserRole, entry.absolutePath);
+        checkItem->setData(Qt::UserRole + 1, entry.size);
+        table->setItem(row, 0, checkItem);
+
+        auto* nameItem = new QTableWidgetItem(entry.relativePath);
+        nameItem->setFlags(nameItem->flags() & ~Qt::ItemIsEditable);
+        nameItem->setToolTip(entry.relativePath);
+        table->setItem(row, 1, nameItem);
+
+        auto* sizeItem = new QTableWidgetItem(formatFolderTrashSize(entry.size));
+        sizeItem->setFlags(sizeItem->flags() & ~Qt::ItemIsEditable);
+        sizeItem->setTextAlignment(Qt::AlignRight | Qt::AlignVCenter);
+        table->setItem(row, 2, sizeItem);
     }
-    layout->addWidget(list, 1);
+
+    layout->addWidget(table, 1);
+
+    auto* totalLabel = new QLabel(panel);
+    totalLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    layout->addWidget(totalLabel);
+
+    auto updateTotalLabel = [&] {
+        qint64 checkedBytes = 0;
+        int checkedCount = 0;
+        for (int row = 0; row < table->rowCount(); ++row) {
+            QTableWidgetItem* item = table->item(row, 0);
+            if (item && item->checkState() == Qt::Checked) {
+                ++checkedCount;
+                checkedBytes += item->data(Qt::UserRole + 1).toLongLong();
+            }
+        }
+        totalLabel->setText(QStringLiteral("Selected: %1/%2 files  •  %3 / %4")
+                                .arg(checkedCount)
+                                .arg(table->rowCount())
+                                .arg(formatFolderTrashSize(checkedBytes), formatFolderTrashSize(allBytes)));
+    };
+
+    QObject::connect(table, &QTableWidget::itemChanged, &overlay, [updateTotalLabel](QTableWidgetItem*) {
+        updateTotalLabel();
+    });
+    updateTotalLabel();
 
     auto* note = new QLabel(QStringLiteral(
         "All files are checked by default.\n"
@@ -226,21 +591,24 @@ FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folde
     layout->addWidget(note);
 
     auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, panel);
-    buttons->button(QDialogButtonBox::Ok)->setText(QStringLiteral("Move checked to trash"));
+    QPushButton* confirmButton = buttons->button(QDialogButtonBox::Ok);
+    confirmButton->setText(QStringLiteral("Move checked to trash"));
+    confirmButton->setDefault(true);
+    confirmButton->setAutoDefault(true);
     layout->addWidget(buttons);
 
     QEventLoop loop;
     auto acceptChoice = [&] {
         choice.accepted = true;
         int checked = 0;
-        for (int row = 0; row < list->count(); ++row) {
-            QListWidgetItem* item = list->item(row);
-            if (item->checkState() == Qt::Checked) {
+        for (int row = 0; row < table->rowCount(); ++row) {
+            QTableWidgetItem* item = table->item(row, 0);
+            if (item && item->checkState() == Qt::Checked) {
                 ++checked;
                 choice.selectedPaths << item->data(Qt::UserRole).toString();
             }
         }
-        choice.moveWholeFolder = checked == list->count();
+        choice.moveWholeFolder = checked == table->rowCount();
         loop.quit();
     };
     auto rejectChoice = [&] {
@@ -251,20 +619,31 @@ FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folde
     QObject::connect(buttons, &QDialogButtonBox::accepted, &overlay, acceptChoice);
     QObject::connect(buttons, &QDialogButtonBox::rejected, &overlay, rejectChoice);
 
+    auto* returnShortcut = new QShortcut(QKeySequence(Qt::Key_Return), &overlay);
+    returnShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(returnShortcut, &QShortcut::activated, &overlay, acceptChoice);
+
+    auto* enterShortcut = new QShortcut(QKeySequence(Qt::Key_Enter), &overlay);
+    enterShortcut->setContext(Qt::WidgetWithChildrenShortcut);
+    QObject::connect(enterShortcut, &QShortcut::activated, &overlay, acceptChoice);
+
     centerPanel();
     overlay.show();
     overlay.raise();
     panel->show();
     panel->raise();
-    list->setFocus(Qt::OtherFocusReason);
+    table->setFocus(Qt::OtherFocusReason);
     overlay.grabKeyboard();
 
     loop.exec();
 
     overlay.releaseKeyboard();
+    trashPanelSettings.setValue(QStringLiteral("folderTrashPanel/size"), panel->size());
+    trashPanelSettings.setValue(QStringLiteral("folderTrashPanel/pos"), panel->pos());
     overlay.hide();
     return choice;
 }
+
 
 } // namespace
 

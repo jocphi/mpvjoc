@@ -13,6 +13,23 @@
 #include <QTextEdit>
 #include <QTextStream>
 #include <QVector>
+#include <QDirIterator>
+
+namespace {
+bool droppedFolderIsCompletelyEmptyAfterMove(const QString& folderRoot)
+{
+    QFileInfo info(folderRoot);
+    if (!info.exists() || !info.isDir())
+        return false;
+
+    QDirIterator it(info.absoluteFilePath(),
+        QDir::AllEntries | QDir::Hidden | QDir::System | QDir::NoDotAndDotDot,
+        QDirIterator::Subdirectories);
+
+    return !it.hasNext();
+}
+}
+
 
 QString MainWindow::moveConfigFilePath()const{QFileInfo info(stateFilePath()); return QDir(info.absolutePath()).filePath("move-buttons.conf");}
 
@@ -34,5 +51,5 @@ bool MainWindow::moveFileToDirectory(const QString&src,const QString&targetDir,Q
 
 void MainWindow::appendMoveLog(const QString&src,const QString&dest,const QString&buttonName){QFile f(moveLogFilePath()); if(f.open(QIODevice::Append|QIODevice::Text)){QTextStream s(&f); s<<QDateTime::currentDateTime().toString(Qt::ISODate)<<"\t"<<buttonName<<"\t"<<src<<"\t"<<dest<<"\n";} refreshMoveLogView();}
 
-void MainWindow::moveSelectedFileToTarget(int idx){if(idx<0||idx>=6)return; loadMoveConfig(); QString target=moveButtonPaths.value(idx); if(target.isEmpty())return; int r=currentRow(); if(r<0||r>=playlistModel->count())return; QString src=playlistModel->pathAt(r); if(src.isEmpty()||!QFileInfo::exists(src)){playlistModel->removeRowAt(r); savePlaylistState(); return;} bool wasCurrent=(QFileInfo(mpvWidget->currentFilePath()).absoluteFilePath()==QFileInfo(src).absoluteFilePath()); if(wasCurrent)closeCurrentFile(); QString dest; if(moveFileToDirectory(src,target,dest)){appendMoveLog(src,dest,moveButtonNames.value(idx,QString("Move %1").arg(idx+1))); playlistModel->removeRowAt(r); if(playlistModel->count()>0){int next=qBound(0,r,playlistModel->count()-1); setPlaylistCurrentSourceRow(next); playPlaylistRow(next);} else savePlaylistState();}}
+void MainWindow::moveSelectedFileToTarget(int idx){if(idx<0||idx>=6)return; loadMoveConfig(); QString target=moveButtonPaths.value(idx); if(target.isEmpty())return; int r=currentRow(); if(r<0||r>=playlistModel->count())return; QString src=playlistModel->pathAt(r); const QString droppedFolderRoot=playlistModel->folderDropRootAt(r); const bool droppedFolderLastItem=playlistModel->isLastItemInFolderDropGroup(r); if(src.isEmpty()||!QFileInfo::exists(src)){playlistModel->removeRowAt(r); savePlaylistState(); return;} bool wasCurrent=(QFileInfo(mpvWidget->currentFilePath()).absoluteFilePath()==QFileInfo(src).absoluteFilePath()); if(wasCurrent)closeCurrentFile(); QString dest; if(moveFileToDirectory(src,target,dest)){if(droppedFolderLastItem&&!droppedFolderRoot.isEmpty()&&droppedFolderIsCompletelyEmptyAfterMove(droppedFolderRoot))QFile::moveToTrash(droppedFolderRoot);appendMoveLog(src,dest,moveButtonNames.value(idx,QString("Move %1").arg(idx+1))); playlistModel->removeRowAt(r); if(playlistModel->count()>0){int next=qBound(0,r,playlistModel->count()-1); setPlaylistCurrentSourceRow(next); playPlaylistRow(next);} else savePlaylistState();}}
 
