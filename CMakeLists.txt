@@ -73,6 +73,8 @@ add_executable(mpvjoc
     ui/MainWindowDrops.cpp
     ui/MainWindowState.cpp
     ui/MainWindowPlaylist.cpp
+    ui/PlaylistWorkspace.cpp
+    ui/MainWindowPlaylists.cpp
     ui/MainWindowPlayback.cpp
     ui/MainWindowMove.cpp
     ui/MainWindowMedia.cpp
