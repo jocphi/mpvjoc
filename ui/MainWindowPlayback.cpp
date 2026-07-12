@@ -14,6 +14,7 @@
 #include <QDialog>
 #include <QDialogButtonBox>
 #include <QFormLayout>
+#include <QFileDialog>
 #include <QFrame>
 #include <QHBoxLayout>
 #include <QSettings>
@@ -185,17 +186,41 @@ void MainWindow::setPlaylistKeyboardFocus(bool focus){
 }
 void MainWindow::toggleKeyboardFocusTarget(){setPlaylistKeyboardFocus(!playlistKeyboardFocus);}
 
-void MainWindow::updateMuteVolumeButton(){ if(!muteButton)return; muteButton->setText(QString("Vol %1%").arg(int(currentVolume+0.5))); QFont f=muteButton->font(); f.setStrikeOut(currentMuted); muteButton->setFont(f); muteButton->setToolTip(currentMuted?"Muted - click to unmute":"Click to mute"); }
+void MainWindow::updateMuteVolumeButton(){
+    if(!muteButton)return;
+    muteButton->setText(currentMuted?QStringLiteral("Muted"):QStringLiteral("Volume: %1%").arg(int(currentVolume+0.5)));
+    muteButton->setToolTip(currentMuted?QStringLiteral("Muted - click to unmute"):QStringLiteral("Click to mute"));
+    muteButton->setStyleSheet(currentMuted
+        ? QStringLiteral("QPushButton{background:#6b2020;color:#ffffff;border:1px solid #d05050;padding:2px 7px;text-align:center;}")
+        : QStringLiteral("QPushButton{background:#174f25;color:#ffffff;border:1px solid #39a857;padding:2px 7px;text-align:center;}"));
+}
 
 void MainWindow::playPauseOrStartSelected(){ if(mpvWidget->currentFilePath().isEmpty()&&playlistModel->count()>0){playPlaylistRow(currentRow());return;} mpvWidget->togglePause();}
 
-void MainWindow::closeCurrentFile(){if(fastPlaybackTimer)fastPlaybackTimer->stop();warpPlaybackMode=false;updateWarpOverlay();suppressNextEndFileAdvance=true;mpvWidget->stopPlayback();position=0;duration=0;timeline->setPosition(0);timeline->setDuration(0);timeline->setTitle(QString());updateTimeLabel(0,0);playPauseButton->setText("Play");}
+void MainWindow::closeCurrentFile(){if(fastPlaybackTimer)fastPlaybackTimer->stop();warpPlaybackMode=false;updateWarpOverlay();suppressNextEndFileAdvance=true;mpvWidget->stopPlayback();position=0;duration=0;timeline->setPosition(0);timeline->setDuration(0);timeline->setTitle(QString());if(titleStatusLabel)titleStatusLabel->setText(QStringLiteral("No file loaded"));updateTimeLabel(0,0);}
 
 double MainWindow::normalizedMaxVideoScale(double scale)const{ if(scale<0.75)return 0.5; if(scale<1.5)return 1.0; return 2.0;}
 
-void MainWindow::updateScaleButtons(){ auto apply=[this](QPushButton*b,bool active){ if(!b)return; QFont f=b->font(); f.setStrikeOut(!active); b->setFont(f); b->setEnabled(true); }; apply(scaleHalfButton,maxVideoScale==0.5); apply(scaleOneButton,maxVideoScale==1.0); apply(scaleTwoButton,maxVideoScale==2.0); updateClipButton();}
+void MainWindow::updateScaleButtons(){
+    if(scaleStatusButton){
+        const QString factor=maxVideoScale==0.5?QString::fromUtf8("½x"):(maxVideoScale==2.0?QStringLiteral("2x"):QStringLiteral("1x"));
+        QString actual=mpvWidget?mpvWidget->currentScalePercentText():QString();
+        if(actual.isEmpty())actual=QStringLiteral("--%");
+        scaleStatusButton->setText(QStringLiteral("%1 · %2 actual").arg(factor,actual));
+        scaleStatusButton->setToolTip(QStringLiteral("Click to cycle ½x, 1x and 2x"));
+        scaleStatusButton->setStyleSheet(QStringLiteral("QPushButton{background:#252525;color:#eeeeee;border:1px solid #666;padding:2px 7px;text-align:center;} QPushButton:hover{background:#333333;}"));
+    }
+    updateClipButton();
+}
 
-void MainWindow::updateClipButton(){if(!clipButton)return;clipButton->setText(clipVideoToScale?"clip":"scale");clipButton->setToolTip(clipVideoToScale?"Clip enabled: exact scale may clip video":"Scale enabled: scale down only when needed to show full video");}
+void MainWindow::updateClipButton(){
+    if(!clipButton)return;
+    clipButton->setText(clipVideoToScale?QStringLiteral("clipped"):QStringLiteral("scaled"));
+    clipButton->setToolTip(clipVideoToScale?QStringLiteral("Exact scale may clip video - click for scaled mode"):QStringLiteral("Video is scaled down to fit - click for clipped mode"));
+    clipButton->setStyleSheet(clipVideoToScale
+        ? QStringLiteral("QPushButton{background:#6b2020;color:#ffffff;border:1px solid #d05050;padding:2px 7px;text-align:center;}")
+        : QStringLiteral("QPushButton{background:#174f25;color:#ffffff;border:1px solid #39a857;padding:2px 7px;text-align:center;}"));
+}
 
 void MainWindow::toggleShortcutHelpOverlay(){
     if(shortcutHelpOverlay&&shortcutHelpOverlay->isVisible()){
@@ -229,7 +254,14 @@ void MainWindow::setClipVideoToScale(bool crop){clipVideoToScale=crop;if(mpvWidg
 
 void MainWindow::setAutoPlayNextEnabled(bool enabled){autoPlayNextEnabled=enabled;updateAutoPlayButton();if(!restoringPlaybackState)savePlaylistState();}
 
-void MainWindow::updateAutoPlayButton(){if(!autoPlayButton)return;autoPlayButton->setText(autoPlayNextEnabled?"auto":"manual");autoPlayButton->setToolTip(autoPlayNextEnabled?"Autoplay next playlist item enabled":"Autoplay next playlist item disabled");}
+void MainWindow::updateAutoPlayButton(){
+    if(!autoPlayButton)return;
+    autoPlayButton->setText(autoPlayNextEnabled?QStringLiteral("autoplay"):QStringLiteral("manual"));
+    autoPlayButton->setToolTip(autoPlayNextEnabled?QStringLiteral("Autoplay next playlist item enabled"):QStringLiteral("Autoplay next playlist item disabled"));
+    autoPlayButton->setStyleSheet(autoPlayNextEnabled
+        ? QStringLiteral("QPushButton{background:#174f25;color:#ffffff;border:1px solid #39a857;padding:2px 7px;text-align:center;}")
+        : QStringLiteral("QPushButton{background:#6b2020;color:#ffffff;border:1px solid #d05050;padding:2px 7px;text-align:center;}"));
+}
 
 
 
@@ -662,6 +694,41 @@ void MainWindow::openSettingsDialog()
     playbackLayout->addWidget(clipCheck);
     settingsLayout->addWidget(playbackGroup);
 
+    auto* moveSettingsGroup = new QGroupBox(QStringLiteral("Move shortcut destinations"), &dialog);
+    auto* moveSettingsLayout = new QFormLayout(moveSettingsGroup);
+    moveSettingsLayout->setContentsMargins(10, 8, 10, 10);
+    moveSettingsLayout->setSpacing(9);
+    auto* moveSettingsHint = new QLabel(QStringLiteral("Configure the destination used by Shift+1 through Shift+6."), moveSettingsGroup);
+    moveSettingsHint->setWordWrap(true);
+    moveSettingsLayout->addRow(moveSettingsHint);
+    QList<QLineEdit*> moveNameEdits;
+    QList<QLineEdit*> movePathEdits;
+    ensureMoveLists();
+    for(int i=0;i<6;++i){
+        auto* row = new QWidget(moveSettingsGroup);
+        auto* rowLayout = new QHBoxLayout(row);
+        rowLayout->setContentsMargins(0,0,0,0);
+        rowLayout->setSpacing(8);
+        auto* nameEdit = new QLineEdit(moveButtonNames.value(i,QStringLiteral("Move %1").arg(i+1)),row);
+        nameEdit->setPlaceholderText(QStringLiteral("Move %1").arg(i+1));
+        nameEdit->setMaximumWidth(170);
+        auto* pathEdit = new QLineEdit(moveButtonPaths.value(i),row);
+        pathEdit->setPlaceholderText(QStringLiteral("Destination folder"));
+        auto* browse = new QPushButton(QStringLiteral("Browse..."),row);
+        browse->setFocusPolicy(Qt::NoFocus);
+        rowLayout->addWidget(nameEdit);
+        rowLayout->addWidget(pathEdit,1);
+        rowLayout->addWidget(browse);
+        QObject::connect(browse,&QPushButton::clicked,&dialog,[this,pathEdit]{
+            const QString start=pathEdit->text().isEmpty()?QDir::homePath():pathEdit->text();
+            const QString selected=QFileDialog::getExistingDirectory(this,QStringLiteral("Choose move destination"),start);
+            if(!selected.isEmpty())pathEdit->setText(QDir::cleanPath(selected));
+        });
+        moveNameEdits<<nameEdit;
+        movePathEdits<<pathEdit;
+        moveSettingsLayout->addRow(QStringLiteral("Shift+%1").arg(i+1),row);
+    }
+    settingsLayout->addWidget(moveSettingsGroup);
     auto* playlistGroup = new QGroupBox(QStringLiteral("Playlist"), &dialog);
     auto* playlistLayout = new QVBoxLayout(playlistGroup);
     playlistLayout->setContentsMargins(10, 8, 10, 10);
@@ -757,6 +824,17 @@ auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Ca
         applyOverlayProfileSettings();
         setAutoPlayNextEnabled(autoPlayCheck->isChecked());
         setClipVideoToScale(clipCheck->isChecked());
+        ensureMoveLists();
+        moveButtonCount=6;
+        for(int i=0;i<6;++i){
+            QString name=moveNameEdits.value(i)->text().trimmed();
+            if(name.isEmpty())name=QStringLiteral("Move %1").arg(i+1);
+            moveButtonNames[i]=name;
+            moveButtonPaths[i]=QDir::cleanPath(movePathEdits.value(i)->text().trimmed());
+            if(movePathEdits.value(i)->text().trimmed().isEmpty())moveButtonPaths[i].clear();
+        }
+        saveMoveConfig();
+        updateMoveButtons();
         savePlaylistState();
     }
 }
@@ -787,6 +865,7 @@ void MainWindow::applyTimelineHueTheme(){
     }
 
     applyOverlayCellSettings();
+    updateTimeLabel(position,duration);
 }
 
 void MainWindow::updateWarpOverlay(){if(mpvWidget)mpvWidget->setWarpOverlay(warpPlaybackMode,warpFactor);applyTimelineHueTheme();}
@@ -811,9 +890,19 @@ void MainWindow::fastPlaybackTick(){
     mpvWidget->seekRelativeKeyframe(skipSeconds);
 }
 
-void MainWindow::updateTimeLabel(double p,double d){if(timeLabel)timeLabel->setText(formatHMS(p)+" / "+formatHMS(d));}
+void MainWindow::updateTimeLabel(double p,double d){
+    if(!timeLabel)return;
+    timeLabel->setText(formatHMS(p)+QStringLiteral(" / ")+formatHMS(d));
+    QColor activeColor(0,255,0);
+    const bool playlistFocusNow=playlistKeyboardFocus||(playlistView&&playlistView->hasFocus())||(playlistSearchEdit&&playlistSearchEdit->hasFocus());
+    if(warpPlaybackMode)activeColor=QColor(255,0,0);
+    else if(playlistFocusNow)activeColor=QColor(128,128,128);
+    timeLabel->setStyleSheet(QStringLiteral(
+        "QLabel{background:#181818;color:rgb(%1,%2,%3);border:1px solid rgb(%1,%2,%3);padding:2px 7px;}")
+        .arg(activeColor.red()).arg(activeColor.green()).arg(activeColor.blue()));
+}
 
-void MainWindow::onPositionChanged(double s){position=s;timeline->setPosition(s);updateTimeLabel(position,duration);}
+void MainWindow::onPositionChanged(double s){position=s;timeline->setPosition(s);updateTimeLabel(position,duration);updateScaleButtons();}
 
 void MainWindow::onDurationChanged(double s){duration=s;timeline->setDuration(s);playlistModel->setDurationForPath(mpvWidget->currentFilePath(),s);savePlaylistState();updateTimeLabel(position,duration);}
 

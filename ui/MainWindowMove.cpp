@@ -39,6 +39,16 @@ void MainWindow::ensureMoveLists(){while(moveButtonNames.size()<6)moveButtonName
 
 void MainWindow::createDefaultMoveConfig(){QFile f(moveConfigFilePath()); if(f.exists())return; if(f.open(QIODevice::WriteOnly|QIODevice::Text)){QTextStream s(&f); s<<"move_button_count=6\n"; for(int i=1;i<=6;++i){s<<"move_button_"<<i<<"_name=Move "<<i<<"\n"; s<<"move_button_"<<i<<"_path=\n";}}}
 
+void MainWindow::saveMoveConfig()const{
+    QFile f(moveConfigFilePath());
+    if(!f.open(QIODevice::WriteOnly|QIODevice::Text))return;
+    QTextStream s(&f);
+    s<<"move_button_count="<<qBound(1,moveButtonCount,6)<<"\n";
+    for(int i=0;i<6;++i){
+        s<<"move_button_"<<(i+1)<<"_name="<<moveButtonNames.value(i,QString("Move %1").arg(i+1))<<"\n";
+        s<<"move_button_"<<(i+1)<<"_path="<<moveButtonPaths.value(i)<<"\n";
+    }
+}
 void MainWindow::loadMoveConfig(){ensureMoveLists(); createDefaultMoveConfig(); QFile f(moveConfigFilePath()); if(f.open(QIODevice::ReadOnly|QIODevice::Text)){while(!f.atEnd()){QString line=QString::fromUtf8(f.readLine()).trimmed(); if(line.isEmpty()||line.startsWith('#'))continue; int eq=line.indexOf('='); if(eq<0)continue; QString key=line.left(eq).trimmed(); QString val=line.mid(eq+1).trimmed(); if(key=="move_button_count")moveButtonCount=qBound(1,val.toInt(),6); for(int i=0;i<6;++i){QString n=QString("move_button_%1_name").arg(i+1); QString p=QString("move_button_%1_path").arg(i+1); if(key==n)moveButtonNames[i]=val; else if(key==p)moveButtonPaths[i]=val;}}} updateMoveButtons(); refreshMoveLogView();}
 
 void MainWindow::refreshMoveLogView(){if(!moveLogView)return; QFile f(moveLogFilePath()); if(f.open(QIODevice::ReadOnly|QIODevice::Text))moveLogView->setPlainText(QString::fromUtf8(f.readAll())); else moveLogView->setPlainText(QString());}
