@@ -74,6 +74,7 @@ void MainWindow::activatePlaylistWorkspace(int index)
     ensureVisiblePlaylistSelection();
     if (playlistKeyboardFocus)
         playlistView->setFocus(Qt::TabFocusReason);
+    if(!restoringPlaybackState)savePlaylistState();
 }
 
 void MainWindow::addPlaylistWorkspace()
@@ -83,6 +84,7 @@ void MainWindow::addPlaylistWorkspace()
     rightTabs->setCurrentWidget(workspace);
     activatePlaylistWorkspace(rightTabs->indexOf(workspace));
     workspace->searchEdit->setFocus(Qt::OtherFocusReason);
+    if(!restoringPlaybackState)savePlaylistState();
 }
 
 void MainWindow::closePlaylistWorkspace(int index)
