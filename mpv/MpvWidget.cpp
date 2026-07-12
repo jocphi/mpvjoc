@@ -72,6 +72,7 @@ private:
 
 
 
+QString MpvWidget::currentScalePercentText()const{return overlayScaleText();}
 QString MpvWidget::overlayScaleText()const{
     if(videoDisplayWidth<=0||videoDisplayHeight<=0)return QString();
     int percent=qMax(1,int(effectiveVideoScale()*100.0+0.5));

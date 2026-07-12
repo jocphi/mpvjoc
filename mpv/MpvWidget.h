@@ -35,6 +35,7 @@ public:
     void seekRelativeKeyframe(double s);
     void setMaxVideoScale(double scale);
     void setClipVideoToScale(bool crop);
+    QString currentScalePercentText()const;
     void showPlaybackOverlay(bool paused);
     void showScaleOverlay();
     void showVolumeOverlay(double volume,bool muted);
