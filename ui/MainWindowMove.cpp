@@ -189,82 +189,139 @@ void MainWindow::moveSelectedFileToFamilyDestination()
         return;
     }
 
+    PlaylistModel*sourceModel=playlistModel;
     int row=currentRow();
     QString sourcePath=selectedPath();
     if(sourcePath.isEmpty()&&mpvWidget){
         sourcePath=mpvWidget->currentFilePath();
         if(!sourcePath.isEmpty()){
-            for(int r=0;r<playlistModel->count();++r)
-                if(QFileInfo(playlistModel->pathAt(r)).absoluteFilePath()==QFileInfo(sourcePath).absoluteFilePath()){row=r;break;}
+            for(int r=0;r<sourceModel->count();++r)
+                if(QFileInfo(sourceModel->pathAt(r)).absoluteFilePath()==QFileInfo(sourcePath).absoluteFilePath()){row=r;break;}
         }
     }
-    if(row<0||sourcePath.isEmpty()){
+    if(!sourceModel||row<0||sourcePath.isEmpty()){
         showFamilyDestinationPreview(QStringLiteral("Family move\n\nNo selected or currently playing playlist file is available."),true);
         return;
     }
 
-    // Always repeat the complete live preflight at the moment Ctrl+M is pressed.
-    const FamilyMoveEvaluation evaluation=FamilyMoveEvaluator::evaluate(sourcePath,familyDestinations);
+    const QString sourceAbs=QFileInfo(sourcePath).absoluteFilePath();
+    const FamilyMoveEvaluation evaluation=FamilyMoveEvaluator::evaluate(sourceAbs,familyDestinations);
     if(evaluation.moveState!=FamilyMoveEvaluation::MoveState::Ready){
         showFamilyDestinationPreview(QStringLiteral("Family move blocked\n\n%1").arg(evaluation.reason),true);
         return;
     }
 
-    const QFileInfo sourceInfo(sourcePath);
-    const QString droppedFolderRoot=playlistModel->folderDropRootAt(row);
-    const bool droppedFolderLastItem=playlistModel->isLastItemInFolderDropGroup(row);
-    const bool wasCurrent=mpvWidget&&
-        QFileInfo(mpvWidget->currentFilePath()).absoluteFilePath()==sourceInfo.absoluteFilePath();
+    if(activeFamilyMoveModel==sourceModel&&activeFamilyMoveSourcePath==sourceAbs)
+        return;
+    for(const PendingFamilyMove&pending:familyMoveQueue)
+        if(pending.model==sourceModel&&pending.sourcePath==sourceAbs)
+            return;
 
-    // The source file must no longer be open when its move starts. If another
-    // playlist item exists, start the next item first (or the previous item
-    // when the source is the final row). Keep the source row until the move
-    // succeeds so its progress line can remain visible during the transfer.
+    const bool wasCurrent=mpvWidget&&
+        QFileInfo(mpvWidget->currentFilePath()).absoluteFilePath()==sourceAbs;
     if(wasCurrent){
         suppressNextEndFileAdvance=true;
         closeCurrentFile();
-        if(playlistModel->count()>1){
-            const int playbackRow=(row+1<playlistModel->count())?row+1:row-1;
+        if(sourceModel==playlistModel&&sourceModel->count()>1){
+            const int playbackRow=(row+1<sourceModel->count())?row+1:row-1;
             playPlaylistRow(playbackRow);
         }
-        QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
+        QCoreApplication::processEvents(QEventLoop::AllEvents);
     }
 
-    suppressNextEndFileAdvance=true;
-    playlistModel->setFamilyMoveProgressAt(row,0);
-    QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-    const SafeFamilyMoveResult moveResult=
-        moveFamilyFileSafely(sourceInfo.absoluteFilePath(),evaluation.destinationFolder,[this,row,lastShown=-1](int percent) mutable {
-            const int normalized=qBound(0,percent,100);
-            // One repaint per percent is smooth enough and avoids overwhelming
-            // the event loop during fast local or NAS transfers.
-            if(normalized==lastShown)return;
-            lastShown=normalized;
-            if(playlistModel)playlistModel->setFamilyMoveProgressAt(row,normalized);
-            if(playlistView&&playlistView->viewport()){
-                playlistView->viewport()->update();
-                playlistView->viewport()->repaint();
-            }
-            QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents);
-        });
-    QTimer::singleShot(750,this,[this]{suppressNextEndFileAdvance=false;});
-    if(!moveResult.ok){
-        playlistModel->setFamilyMoveProgressAt(row,-1);
-        showFamilyDestinationPreview(QStringLiteral("Family move failed\n\n%1").arg(moveResult.error),true);
+    sourceModel->setFamilyMoveProgressAt(row,0);
+    familyMoveQueue.push_back(PendingFamilyMove{QPointer<PlaylistModel>(sourceModel),sourceAbs});
+    if(playlistView&&playlistView->viewport())playlistView->viewport()->update();
+
+    if(!familyMoveBusy)
+        QTimer::singleShot(0,this,[this]{processNextFamilyMove();});
+}
+
+
+void MainWindow::processNextFamilyMove()
+{
+    if(familyMoveBusy)return;
+
+    while(!familyMoveQueue.isEmpty()){
+        const PendingFamilyMove pending=familyMoveQueue.takeFirst();
+        PlaylistModel*model=pending.model.data();
+        if(!model)continue;
+
+        int row=-1;
+        for(int r=0;r<model->count();++r){
+            if(QFileInfo(model->pathAt(r)).absoluteFilePath()==pending.sourcePath){row=r;break;}
+        }
+        if(row<0)continue;
+
+        const FamilyMoveEvaluation evaluation=
+            FamilyMoveEvaluator::evaluate(pending.sourcePath,familyDestinations);
+        if(evaluation.moveState!=FamilyMoveEvaluation::MoveState::Ready){
+            model->setFamilyMoveProgressAt(row,-1);
+            showFamilyDestinationPreview(QStringLiteral("Queued family move blocked\n\n%1").arg(evaluation.reason),true);
+            continue;
+        }
+
+        familyMoveBusy=true;
+        activeFamilyMoveModel=model;
+        activeFamilyMoveSourcePath=pending.sourcePath;
+
+        const QString droppedFolderRoot=model->folderDropRootAt(row);
+        const bool droppedFolderLastItem=model->isLastItemInFolderDropGroup(row);
+        model->setFamilyMoveProgressAt(row,0);
+        if(model==playlistModel&&playlistView&&playlistView->viewport())
+            playlistView->viewport()->repaint();
+
+        const SafeFamilyMoveResult moveResult=
+            moveFamilyFileSafely(pending.sourcePath,evaluation.destinationFolder,
+                [this,modelPath=QPointer<PlaylistModel>(model),sourcePath=pending.sourcePath,lastShown=-1](int percent) mutable {
+                    PlaylistModel*progressModel=modelPath.data();
+                    if(!progressModel)return;
+                    int progressRow=-1;
+                    for(int r=0;r<progressModel->count();++r)
+                        if(QFileInfo(progressModel->pathAt(r)).absoluteFilePath()==sourcePath){progressRow=r;break;}
+                    if(progressRow<0)return;
+                    const int normalized=qBound(0,percent,100);
+                    if(normalized==lastShown)return;
+                    lastShown=normalized;
+                    progressModel->setFamilyMoveProgressAt(progressRow,normalized);
+                    if(progressModel==playlistModel&&playlistView&&playlistView->viewport()){
+                        playlistView->viewport()->update();
+                        playlistView->viewport()->repaint();
+                    }
+                    // Permit Ctrl+M and playback control while a synchronous
+                    // cross-filesystem copy is progressing. familyMoveBusy
+                    // prevents re-entering the active transfer; new requests
+                    // are appended to familyMoveQueue.
+                    QCoreApplication::processEvents(QEventLoop::AllEvents);
+                });
+
+        int finalRow=-1;
+        for(int r=0;r<model->count();++r)
+            if(QFileInfo(model->pathAt(r)).absoluteFilePath()==pending.sourcePath){finalRow=r;break;}
+
+        if(!moveResult.ok){
+            if(finalRow>=0)model->setFamilyMoveProgressAt(finalRow,-1);
+            showFamilyDestinationPreview(QStringLiteral("Family move failed\n\n%1").arg(moveResult.error),true);
+        }else{
+            if(droppedFolderLastItem&&!droppedFolderRoot.isEmpty()&&
+               droppedFolderIsCompletelyEmptyAfterMove(droppedFolderRoot))
+                QFile::moveToTrash(droppedFolderRoot);
+
+            if(finalRow>=0)model->removeRowAt(finalRow);
+            if(model==playlistModel&&model->count()>0)
+                setPlaylistCurrentSourceRow(qBound(0,finalRow,model->count()-1),true);
+            savePlaylistState();
+            if(model==playlistModel)updatePlaylistSummary();
+        }
+
+        activeFamilyMoveModel.clear();
+        activeFamilyMoveSourcePath.clear();
+        familyMoveBusy=false;
+
+        if(!familyMoveQueue.isEmpty())
+            QTimer::singleShot(0,this,[this]{processNextFamilyMove();});
         return;
     }
-
-    if(droppedFolderLastItem&&!droppedFolderRoot.isEmpty()&&
-       droppedFolderIsCompletelyEmptyAfterMove(droppedFolderRoot))
-        QFile::moveToTrash(droppedFolderRoot);
-
-    // Ctrl+M is the confirmation. After success the source row is removed.
-    playlistModel->removeRowAt(row);
-    if(playlistModel->count()>0)
-        setPlaylistCurrentSourceRow(qBound(0,row,playlistModel->count()-1),true);
-
-    savePlaylistState();
-    updatePlaylistSummary();
 }
 
 void MainWindow::moveSelectedFileToTarget(int idx){if(currentPlaylistLocked())return;if(idx<0||idx>=6)return; loadMoveConfig(); QString target=moveButtonPaths.value(idx); if(target.isEmpty())return; int r=currentRow(); if(r<0||r>=playlistModel->count())return; QString src=playlistModel->pathAt(r); const QString droppedFolderRoot=playlistModel->folderDropRootAt(r); const bool droppedFolderLastItem=playlistModel->isLastItemInFolderDropGroup(r); if(src.isEmpty()||!QFileInfo::exists(src)){playlistModel->removeRowAt(r); savePlaylistState(); return;} bool wasCurrent=(QFileInfo(mpvWidget->currentFilePath()).absoluteFilePath()==QFileInfo(src).absoluteFilePath()); if(wasCurrent)closeCurrentFile(); QString dest; if(moveFileToDirectory(src,target,dest)){if(droppedFolderLastItem&&!droppedFolderRoot.isEmpty()&&droppedFolderIsCompletelyEmptyAfterMove(droppedFolderRoot))QFile::moveToTrash(droppedFolderRoot);appendMoveLog(src,dest,moveButtonNames.value(idx,QString("Move %1").arg(idx+1))); playlistModel->removeRowAt(r); if(playlistModel->count()>0){int next=qBound(0,r,playlistModel->count()-1); setPlaylistCurrentSourceRow(next); playPlaylistRow(next);} else savePlaylistState();}}
