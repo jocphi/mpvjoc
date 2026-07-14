@@ -1,9 +1,15 @@
 #include "MainWindow.h"
 #include "PlaylistWorkspace.h"
+#include "PlaylistTabRenameController.h"
 #include "playlist/PlaylistFilterProxyModel.h"
 #include "playlist/PlaylistModel.h"
 #include <QAbstractItemModel>
 #include <QLineEdit>
+#include <QAction>
+#include <QColor>
+#include <QMenu>
+#include <QPalette>
+#include <QTabBar>
 #include <QListView>
 #include <QPushButton>
 #include <QTabWidget>
@@ -110,4 +116,57 @@ void MainWindow::closePlaylistWorkspace(int index)
     activatePlaylistWorkspace(qBound(0, rightTabs->currentIndex(), rightTabs->count() - 1));
     if (!restoringPlaybackState)
         savePlaylistState();
+}
+
+
+bool MainWindow::currentPlaylistLocked()const
+{
+    if(!rightTabs)return false;
+    const int index=rightTabs->currentIndex();
+    if(index<0||index>=rightTabs->count())return false;
+    auto*workspace=static_cast<PlaylistWorkspace*>(rightTabs->widget(index));
+    return workspace&&workspace->locked;
+}
+
+void MainWindow::setPlaylistWorkspaceLocked(int index,bool locked)
+{
+    if(!rightTabs||index<0||index>=rightTabs->count())return;
+    auto*workspace=static_cast<PlaylistWorkspace*>(rightTabs->widget(index));
+    if(!workspace)return;
+    workspace->locked=locked;
+    workspace->view->setDragEnabled(!locked);
+    workspace->view->setAcceptDrops(!locked);
+    workspace->view->viewport()->setAcceptDrops(!locked);
+    workspace->view->setDropIndicatorShown(!locked);
+    const QColor normal=rightTabs->palette().color(QPalette::WindowText);
+    rightTabs->tabBar()->setTabData(index,locked);
+    rightTabs->tabBar()->setTabTextColor(index,locked?QColor(255,185,185):normal);
+    rightTabs->tabBar()->update(rightTabs->tabBar()->tabRect(index));
+    rightTabs->setTabToolTip(index,locked
+        ?QStringLiteral("Locked playlist - read only")
+        :QStringLiteral("Unlocked playlist"));
+    if(!restoringPlaybackState)savePlaylistState();
+}
+
+void MainWindow::showPlaylistTabContextMenu(const QPoint&pos)
+{
+    if(!rightTabs)return;
+    const int index=rightTabs->tabBar()->tabAt(pos);
+    if(index<0||index>=rightTabs->count())return;
+    auto*workspace=static_cast<PlaylistWorkspace*>(rightTabs->widget(index));
+    if(!workspace)return;
+
+    QMenu menu(this);
+    QAction*renameAction=menu.addAction(QStringLiteral("Rename"));
+    QAction*lockAction=menu.addAction(workspace->locked?QStringLiteral("Unlock"):QStringLiteral("Lock"));
+    menu.addSeparator();
+    QAction*closeAction=menu.addAction(QStringLiteral("Close"));
+
+    QAction*chosen=menu.exec(rightTabs->tabBar()->mapToGlobal(pos));
+    if(chosen==renameAction&&playlistTabRenameController)
+        playlistTabRenameController->editTab(index);
+    else if(chosen==lockAction)
+        setPlaylistWorkspaceLocked(index,!workspace->locked);
+    else if(chosen==closeAction)
+        closePlaylistWorkspace(index);
 }

@@ -2,7 +2,9 @@
 #include <QMainWindow>
 #include <QVector>
 #include <QStringList>
-class MpvWidget; class PlaylistWorkspace; class PlaylistModel; class PlaylistFilterProxyModel; class MetadataProbeManager; class ThumbnailManager; class QLineEdit; class QListView; class QSplitter; class TimelineWidget; class QLabel; class QPushButton; class QTabWidget; class QTextEdit; class QCloseEvent; class QDragEnterEvent; class QDropEvent; class QKeyEvent; class QTimer;
+class MpvWidget; class PlaylistWorkspace; class PlaylistTabRenameController; class PlaylistModel; class PlaylistFilterProxyModel; class MetadataProbeManager; class ThumbnailManager; class QLineEdit; class QListView; class QSplitter; class TimelineWidget; class QLabel; class QPushButton; class QTabWidget; class QTextEdit; class QCloseEvent; class QDragEnterEvent; class QDropEvent; class QKeyEvent; class QTimer;
+
+#include "family/FamilyDestinationRepository.h"
 
 class MainWindow: public QMainWindow{
     Q_OBJECT
@@ -35,6 +37,10 @@ private:
     void moveSelectedFileToTrash();
     void playNextPlaylistFile();
     void playPreviousPlaylistFile();
+    QString defaultEverythingRustDatabasePath()const;
+    void loadFamilyDestinationSettings();
+    void saveFamilyDestinationSettings();
+    bool refreshFamilyDestinations(QString*errorOut=nullptr);
     QString moveConfigFilePath()const;
     QString moveLogFilePath()const;
     void ensureMoveLists();
@@ -51,6 +57,8 @@ private:
     void updateScaleButtons();
     void setClipVideoToScale(bool crop);
     void updateClipButton();
+    void setHardwareDecodingMode(const QString&mode);
+    void updateHardwareDecodingButton();
     void toggleShortcutHelpOverlay();
     QString shortcutHelpText()const;
     void setAutoPlayNextEnabled(bool enabled);
@@ -59,6 +67,8 @@ private:
     void setWarpFactor(int factor);
     void toggleWarpPlaybackMode();
     void fastPlaybackTick();
+    void moveSelectedFileToFamilyDestination();
+    void showFamilyDestinationPreview(const QString&text,bool error);
     void moveSelectedFileToTarget(int idx);
     int currentRow()const;
     QString selectedPath()const;
@@ -92,10 +102,14 @@ private:
     void activatePlaylistWorkspace(int index);
     void addPlaylistWorkspace();
     void closePlaylistWorkspace(int index);
-    MpvWidget*mpvWidget=nullptr; PlaylistModel*playlistModel=nullptr; MetadataProbeManager*metadataProbe=nullptr; ThumbnailManager*thumbnailManager=nullptr; QLineEdit*playlistSearchEdit=nullptr; QListView*playlistView=nullptr; PlaylistFilterProxyModel*playlistProxyModel=nullptr; QSplitter*playlistSplitter=nullptr; TimelineWidget*timeline=nullptr; QLabel*timeLabel=nullptr; QLabel*titleStatusLabel=nullptr; QLabel*playlistSummaryLabel=nullptr; QLabel*shortcutHelpOverlay=nullptr; QPushButton*muteButton=nullptr; QPushButton*scaleStatusButton=nullptr; QPushButton*clipButton=nullptr; QPushButton*autoPlayButton=nullptr; QTabWidget*rightTabs=nullptr; QTextEdit*moveLogView=nullptr; QTimer*fastPlaybackTimer=nullptr; QVector<QPushButton*> moveButtons; QStringList moveButtonNames={"Move 1","Move 2","Move 3","Move 4","Move 5","Move 6"}; QStringList moveButtonPaths={"","","","","",""}; int moveButtonCount=6; double position=0,duration=0,currentVolume=100,maxVideoScale=1.0; int warpFactor=1; int overlayCenterCell=5; int overlayScaleDisplayCell=8; int overlayVolumeCell=6; int overlayVisibilityMapCell=9; int overlayWarpLabelCell=3; int overlayCenterOpacity=100; int overlayScaleDisplayOpacity=100; int overlayVolumeOpacity=100; int overlayVisibilityMapOpacity=100; int overlayWarpLabelOpacity=100; static constexpr int OverlayPlayState=1<<0; static constexpr int OverlayScaleDisplay=1<<1; static constexpr int OverlayVolume=1<<2; static constexpr int OverlayVisibilityMap=1<<3; static constexpr int OverlayWarpLabel=1<<4; static constexpr int OverlayAll=OverlayPlayState|OverlayScaleDisplay|OverlayVolume|OverlayVisibilityMap|OverlayWarpLabel; int overlayProfilePersistentInfo=OverlayAll; int overlayProfilePlayStateChange=OverlayPlayState|OverlayScaleDisplay; int overlayProfileVolumeChange=OverlayVolume; int overlayProfileWarpMode=OverlayWarpLabel; int overlayProfileScaleChange=OverlayScaleDisplay; bool currentMuted=false; bool clipVideoToScale=true; bool restoringPlaybackState=true; bool suppressNextEndFileAdvance=false; bool warpPlaybackMode=false; bool autoPlayNextEnabled=true; bool playlistKeyboardFocus=false;
+    void showPlaylistTabContextMenu(const QPoint&pos);
+    void setPlaylistWorkspaceLocked(int index,bool locked);
+    bool currentPlaylistLocked()const;
+    MpvWidget*mpvWidget=nullptr; PlaylistModel*playlistModel=nullptr; MetadataProbeManager*metadataProbe=nullptr; ThumbnailManager*thumbnailManager=nullptr; QLineEdit*playlistSearchEdit=nullptr; QListView*playlistView=nullptr; PlaylistFilterProxyModel*playlistProxyModel=nullptr; QSplitter*playlistSplitter=nullptr; TimelineWidget*timeline=nullptr; QLabel*timeLabel=nullptr; QLabel*titleStatusLabel=nullptr; QLabel*playlistSummaryLabel=nullptr; QLabel*shortcutHelpOverlay=nullptr; QPushButton*muteButton=nullptr; QPushButton*scaleStatusButton=nullptr; QPushButton*clipButton=nullptr; QPushButton*hwdecButton=nullptr; QPushButton*autoPlayButton=nullptr; QTabWidget*rightTabs=nullptr; QTextEdit*moveLogView=nullptr; QTimer*fastPlaybackTimer=nullptr; QVector<QPushButton*> moveButtons; QStringList moveButtonNames={"Move 1","Move 2","Move 3","Move 4","Move 5","Move 6"}; QStringList moveButtonPaths={"","","","","",""}; int moveButtonCount=6; QString everythingRustDatabasePath; QVector<FamilyDestination> familyDestinations; QString familyDestinationsLastError; double position=0,duration=0,currentVolume=100,maxVideoScale=1.0; int warpFactor=1; int overlayCenterCell=5; int overlayScaleDisplayCell=8; int overlayVolumeCell=6; int overlayVisibilityMapCell=9; int overlayWarpLabelCell=3; int overlayCenterOpacity=100; int overlayScaleDisplayOpacity=100; int overlayVolumeOpacity=100; int overlayVisibilityMapOpacity=100; int overlayWarpLabelOpacity=100; static constexpr int OverlayPlayState=1<<0; static constexpr int OverlayScaleDisplay=1<<1; static constexpr int OverlayVolume=1<<2; static constexpr int OverlayVisibilityMap=1<<3; static constexpr int OverlayWarpLabel=1<<4; static constexpr int OverlayAll=OverlayPlayState|OverlayScaleDisplay|OverlayVolume|OverlayVisibilityMap|OverlayWarpLabel; int overlayProfilePersistentInfo=OverlayAll; int overlayProfilePlayStateChange=OverlayPlayState|OverlayScaleDisplay; int overlayProfileVolumeChange=OverlayVolume; int overlayProfileWarpMode=OverlayWarpLabel; int overlayProfileScaleChange=OverlayScaleDisplay; bool currentMuted=false; bool clipVideoToScale=true; bool restoringPlaybackState=true; bool suppressNextEndFileAdvance=false; bool warpPlaybackMode=false; bool autoPlayNextEnabled=true; QString hardwareDecodingMode=QStringLiteral("no"); QString lastHardwareDecodingMode=QStringLiteral("auto-safe"); bool playlistKeyboardFocus=false;
     int timelineGreenDarkPercent=80;
     int timelineGreyDarkPercent=80;
     int timelineRedDarkPercent=80;
     QVector<PlaylistWorkspace*> playlistWorkspaces;
+    PlaylistTabRenameController*playlistTabRenameController=nullptr;
     int playlistSerial=2;
 };

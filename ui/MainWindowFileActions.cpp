@@ -648,7 +648,7 @@ FolderTrashChoice chooseFolderTrashEntries(QWidget* parent, const QString& folde
 } // namespace
 
 void MainWindow::moveSelectedFileToTrash()
-{
+{if(currentPlaylistLocked())return;
     int r = currentRow();
     if (r < 0 || r >= playlistModel->count())
         return;

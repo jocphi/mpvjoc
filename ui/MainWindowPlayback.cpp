@@ -1,3 +1,4 @@
+#include "playlist/PlaylistDelegate.h"
 #include "MainWindow.h"
 #include <QColor>
 #include "TimelineWidget.h"
@@ -252,6 +253,30 @@ void MainWindow::setMaxVideoScale(double scale){ maxVideoScale=normalizedMaxVide
 
 void MainWindow::setClipVideoToScale(bool crop){clipVideoToScale=crop;if(mpvWidget){mpvWidget->setClipVideoToScale(clipVideoToScale);mpvWidget->showScaleOverlay();}updateClipButton();if(!restoringPlaybackState)savePlaylistState();}
 
+void MainWindow::setHardwareDecodingMode(const QString&mode){
+    QString normalized=mode.trimmed().toLower();
+    if(normalized.isEmpty()||normalized==QStringLiteral("software"))normalized=QStringLiteral("no");
+    hardwareDecodingMode=normalized;
+    if(hardwareDecodingMode!=QStringLiteral("no")){
+        lastHardwareDecodingMode=hardwareDecodingMode;
+        QSettings().setValue(QStringLiteral("video/lastHardwareDecodingMode"),lastHardwareDecodingMode);
+    }
+    QSettings().setValue(QStringLiteral("video/hwdecMode"),hardwareDecodingMode);
+    QSettings().setValue(QStringLiteral("video/hardwareDecoding"),hardwareDecodingMode!=QStringLiteral("no"));
+    if(mpvWidget)mpvWidget->setHardwareDecodingMode(hardwareDecodingMode);
+    updateHardwareDecodingButton();
+}
+void MainWindow::updateHardwareDecodingButton(){
+    if(!hwdecButton)return;
+    const bool software=hardwareDecodingMode==QStringLiteral("no");
+    hwdecButton->setText(software?QStringLiteral("software"):hardwareDecodingMode);
+    hwdecButton->setToolTip(software
+        ?QStringLiteral("Software video decoding. Click to restore %1. Restart mpvjoc if the current file does not rebuild cleanly.").arg(lastHardwareDecodingMode)
+        :QStringLiteral("mpv hwdec=%1. Click for software decoding. Restart mpvjoc if the current file does not rebuild cleanly.").arg(hardwareDecodingMode));
+    hwdecButton->setStyleSheet(software
+        ?QStringLiteral("QPushButton{background:#6b2020;color:#ffffff;border:1px solid #d05050;padding:2px 7px;text-align:center;}")
+        :QStringLiteral("QPushButton{background:#174f25;color:#ffffff;border:1px solid #39a857;padding:2px 7px;text-align:center;}"));
+}
 void MainWindow::setAutoPlayNextEnabled(bool enabled){autoPlayNextEnabled=enabled;updateAutoPlayButton();if(!restoringPlaybackState)savePlaylistState();}
 
 void MainWindow::updateAutoPlayButton(){
@@ -369,6 +394,48 @@ void MainWindow::applyOverlayProfileSettings()
 
 
 
+
+
+QString MainWindow::defaultEverythingRustDatabasePath()const
+{
+    return QDir::home().filePath(QStringLiteral(".local/share/everything-rust/files.db"));
+}
+
+void MainWindow::loadFamilyDestinationSettings()
+{
+    QSettings settings;
+    everythingRustDatabasePath = settings
+        .value(QStringLiteral("family/everythingRustDatabasePath"), defaultEverythingRustDatabasePath())
+        .toString()
+        .trimmed();
+    if (everythingRustDatabasePath.isEmpty())
+        everythingRustDatabasePath = defaultEverythingRustDatabasePath();
+}
+
+void MainWindow::saveFamilyDestinationSettings()
+{
+    QSettings().setValue(QStringLiteral("family/everythingRustDatabasePath"), everythingRustDatabasePath);
+}
+
+bool MainWindow::refreshFamilyDestinations(QString*errorOut)
+{
+    QVector<FamilyDestination> loaded;
+    QString error;
+    if (!FamilyDestinationRepository::loadReadOnly(everythingRustDatabasePath, loaded, &error)) {
+        familyDestinationsLastError = error;
+        if (errorOut)
+            *errorOut = error;
+        return false; // Preserve the previous in-memory list.
+    }
+
+    familyDestinations = std::move(loaded);
+    PlaylistDelegate::setFamilyDestinations(familyDestinations);
+    if(playlistView&&playlistView->viewport())playlistView->viewport()->update();
+    familyDestinationsLastError.clear();
+    if (errorOut)
+        errorOut->clear();
+    return true;
+}
 
 void MainWindow::openSettingsDialog()
 {
@@ -690,8 +757,37 @@ void MainWindow::openSettingsDialog()
     auto* clipCheck = new QCheckBox(QStringLiteral("Clip exact video scale when larger than the video area"), playbackGroup);
     clipCheck->setChecked(clipVideoToScale);
     clipCheck->setToolTip(QStringLiteral("When enabled, exact scale may clip video. When disabled, oversized video is scaled down to fit."));
+    auto* hardwareDecodeRow = new QWidget(playbackGroup);
+    auto* hardwareDecodeRowLayout = new QHBoxLayout(hardwareDecodeRow);
+    hardwareDecodeRowLayout->setContentsMargins(0,0,0,0);
+    hardwareDecodeRowLayout->setSpacing(8);
+    auto* hardwareDecodeLabel = new QLabel(QStringLiteral("Video decoding"),hardwareDecodeRow);
+    auto* hardwareDecodeCombo = new QComboBox(hardwareDecodeRow);
+    hardwareDecodeCombo->setEditable(true);
+    const QStringList hardwareDecodeModes{
+        QStringLiteral("no"),
+        QStringLiteral("auto-safe"),
+        QStringLiteral("auto-copy-safe"),
+        QStringLiteral("vaapi"),
+        QStringLiteral("vaapi-copy"),
+        QStringLiteral("vulkan"),
+        QStringLiteral("vulkan-copy"),
+        QStringLiteral("nvdec"),
+        QStringLiteral("nvdec-copy")
+    };
+    for(const QString&mode:hardwareDecodeModes)hardwareDecodeCombo->addItem(mode,mode);
+    int hardwareDecodeIndex=hardwareDecodeCombo->findData(hardwareDecodingMode);
+    if(hardwareDecodeIndex>=0)hardwareDecodeCombo->setCurrentIndex(hardwareDecodeIndex);
+    else hardwareDecodeCombo->setEditText(hardwareDecodingMode);
+    hardwareDecodeCombo->setToolTip(QStringLiteral("Exact value passed to mpv's hwdec option. 'no' is software decoding. Unsupported modes fall back or fail according to mpv."));
+    hardwareDecodeRowLayout->addWidget(hardwareDecodeLabel);
+    hardwareDecodeRowLayout->addWidget(hardwareDecodeCombo,1);
+    auto* hardwareDecodeNote = new QLabel(QStringLiteral("Decoder changes are requested immediately; restarting mpvjoc guarantees a fresh decoder/render pipeline. Direct hardware modes may corrupt some Dolby Vision/10-bit files in the embedded OpenGL renderer."), playbackGroup);
+    hardwareDecodeNote->setWordWrap(true);
     playbackLayout->addWidget(autoPlayCheck);
     playbackLayout->addWidget(clipCheck);
+    playbackLayout->addWidget(hardwareDecodeRow);
+    playbackLayout->addWidget(hardwareDecodeNote);
     settingsLayout->addWidget(playbackGroup);
 
     auto* moveSettingsGroup = new QGroupBox(QStringLiteral("Move shortcut destinations"), &dialog);
@@ -729,6 +825,62 @@ void MainWindow::openSettingsDialog()
         moveSettingsLayout->addRow(QStringLiteral("Shift+%1").arg(i+1),row);
     }
     settingsLayout->addWidget(moveSettingsGroup);
+
+    auto* familyGroup = new QGroupBox(QStringLiteral("Family destinations"), &dialog);
+    auto* familyLayout = new QFormLayout(familyGroup);
+    familyLayout->setContentsMargins(10, 8, 10, 10);
+    familyLayout->setSpacing(8);
+
+    auto* familyPathRow = new QWidget(familyGroup);
+    auto* familyPathLayout = new QHBoxLayout(familyPathRow);
+    familyPathLayout->setContentsMargins(0, 0, 0, 0);
+    familyPathLayout->setSpacing(8);
+    auto* familyDatabaseEdit = new QLineEdit(everythingRustDatabasePath, familyPathRow);
+    auto* familyBrowseButton = new QPushButton(QStringLiteral("Browse..."), familyPathRow);
+    familyPathLayout->addWidget(familyDatabaseEdit, 1);
+    familyPathLayout->addWidget(familyBrowseButton);
+    familyLayout->addRow(QStringLiteral("Everything-rust database"), familyPathRow);
+
+    auto familySummaryText = [](const QVector<FamilyDestination>& destinations, const QString& error) {
+        if (!error.isEmpty())
+            return QStringLiteral("Error: %1").arg(error);
+        int available = 0;
+        for (const FamilyDestination& destination : destinations)
+            if (destination.available) ++available;
+        return QStringLiteral("Loaded: %1  •  available: %2  •  unavailable: %3")
+            .arg(destinations.size()).arg(available).arg(destinations.size() - available);
+    };
+
+    auto* familyStatusLabel = new QLabel(familySummaryText(familyDestinations, familyDestinationsLastError), familyGroup);
+    familyStatusLabel->setWordWrap(true);
+    familyStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
+    auto* familyRefreshButton = new QPushButton(QStringLiteral("Refresh destinations"), familyGroup);
+    familyLayout->addRow(QStringLiteral("Status"), familyStatusLabel);
+    familyLayout->addRow(QString(), familyRefreshButton);
+
+    QObject::connect(familyBrowseButton, &QPushButton::clicked, &dialog, [&, familyDatabaseEdit] {
+        const QString current = familyDatabaseEdit->text().trimmed();
+        const QString start = current.isEmpty() ? QDir::homePath() : QFileInfo(current).absolutePath();
+        const QString chosen = QFileDialog::getOpenFileName(&dialog,
+            QStringLiteral("Select everything-rust SQLite database"),
+            start,
+            QStringLiteral("SQLite databases (*.db *.sqlite *.sqlite3);;All files (*)"));
+        if (!chosen.isEmpty())
+            familyDatabaseEdit->setText(chosen);
+    });
+
+    QObject::connect(familyRefreshButton, &QPushButton::clicked, &dialog, [=] {
+        QVector<FamilyDestination> preview;
+        QString error;
+        const QString candidate = familyDatabaseEdit->text().trimmed();
+        if (FamilyDestinationRepository::loadReadOnly(candidate, preview, &error))
+            familyStatusLabel->setText(familySummaryText(preview, QString()));
+        else
+            familyStatusLabel->setText(familySummaryText(preview, error));
+    });
+
+    rootLayout->addWidget(familyGroup);
+
     auto* playlistGroup = new QGroupBox(QStringLiteral("Playlist"), &dialog);
     auto* playlistLayout = new QVBoxLayout(playlistGroup);
     playlistLayout->setContentsMargins(10, 8, 10, 10);
@@ -822,8 +974,15 @@ auto* buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Ca
         applyTimelineHueTheme();
         applyOverlayCellSettings();
         applyOverlayProfileSettings();
+        everythingRustDatabasePath = familyDatabaseEdit->text().trimmed();
+        if (everythingRustDatabasePath.isEmpty())
+            everythingRustDatabasePath = defaultEverythingRustDatabasePath();
+        saveFamilyDestinationSettings();
+        QString familyRefreshError;
+        refreshFamilyDestinations(&familyRefreshError);
         setAutoPlayNextEnabled(autoPlayCheck->isChecked());
         setClipVideoToScale(clipCheck->isChecked());
+        setHardwareDecodingMode(hardwareDecodeCombo->currentText());
         ensureMoveLists();
         moveButtonCount=6;
         for(int i=0;i<6;++i){

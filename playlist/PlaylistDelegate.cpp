@@ -1,3 +1,4 @@
+#include "family/FamilyMoveEvaluator.h"
 #include "PlaylistDelegate.h"
 #include "util/TextHighlighting.h"
 #include "PlaylistDurationRuns.h"
@@ -19,6 +20,36 @@
 #include <QtGlobal>
 #include <QSettings>
 #include <QSortFilterProxyModel>
+
+
+namespace {
+QVector<FamilyDestination> gFamilyDestinations;
+
+QColor familyFolderIndicatorColor(FamilyMoveEvaluation::FolderState state)
+{
+    switch(state){
+    case FamilyMoveEvaluation::FolderState::Online:return QColor(24,168,72);
+    case FamilyMoveEvaluation::FolderState::Offline:return QColor(230,138,0);
+    case FamilyMoveEvaluation::FolderState::Missing:return QColor(210,47,47);
+    }
+    return QColor(210,47,47);
+}
+
+QColor familyMoveIndicatorColor(FamilyMoveEvaluation::MoveState state)
+{
+    switch(state){
+    case FamilyMoveEvaluation::MoveState::Ready:return QColor(24,168,72);
+    case FamilyMoveEvaluation::MoveState::Offline:return QColor(230,138,0);
+    case FamilyMoveEvaluation::MoveState::Blocked:return QColor(210,47,47);
+    }
+    return QColor(210,47,47);
+}
+}
+
+void PlaylistDelegate::setFamilyDestinations(const QVector<FamilyDestination>&destinations)
+{
+    gFamilyDestinations=destinations;
+}
 
 static PlaylistSizeUnit gPlaylistSizeUnit = PlaylistSizeUnit::Megabytes;
 static bool gPlaylistSizeUnitLoaded = false;
@@ -108,6 +139,18 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
     }
     int x = th.right() + 10;
     QString title = i.data(PlaylistModel::TitleRole).toString();
+    const FamilyMoveEvaluation familyEvaluation =
+        FamilyMoveEvaluator::evaluate(i.data(PlaylistModel::PathRole).toString(), gFamilyDestinations);
+    const int familyIndicatorWidth=8;
+    const int familyIndicatorGap=2;
+    const QRect familyFolderRect(x,r.top()+8,familyIndicatorWidth,18);
+    const QRect familyMoveRect(familyFolderRect.right()+familyIndicatorGap+1,r.top()+8,familyIndicatorWidth,18);
+    p->setPen(QColor(20,20,20));
+    p->setBrush(familyFolderIndicatorColor(familyEvaluation.folderState));
+    p->drawRect(familyFolderRect);
+    p->setBrush(familyMoveIndicatorColor(familyEvaluation.moveState));
+    p->drawRect(familyMoveRect);
+    const int titleX=familyMoveRect.right()+7;
     double dur = i.data(PlaylistModel::DurationRole).toDouble();
     bool dk = i.data(PlaylistModel::DurationKnownRole).toBool();
     QString codec = i.data(PlaylistModel::CodecRole).toString();
@@ -129,8 +172,23 @@ void PlaylistDelegate::paint(QPainter* p, const QStyleOptionViewItem& o, const Q
         heightBadge = resolutionBadgeText(vh);
         heightColor = resolutionBadgeColor(vh);
     }
-    QRect titleRect(x, r.top() + 7, r.width() - x + r.left() - 90, 20);
+    QRect titleRect(titleX, r.top() + 7, r.right() - 90 - titleX, 20);
     drawHighlightedTitle(p, titleRect, title);
+    const int familyMoveProgress=i.data(PlaylistModel::FamilyMoveProgressRole).toInt();
+    if(familyMoveProgress>=0){
+        // Empty progress is a dark track. Completed progress grows from left
+        // to right in green, rather than covering a green line with black.
+        const QRect progressTrack(titleRect.left(),titleRect.bottom()+1,qMax(20,titleRect.width()),5);
+        p->setPen(QPen(QColor(8,24,12),1));
+        p->setBrush(QColor(1,12,5));
+        p->drawRect(progressTrack.adjusted(0,0,-1,-1));
+        const int filled=qBound(0,(progressTrack.width()*familyMoveProgress)/100,progressTrack.width());
+        if(filled>0){
+            p->setPen(Qt::NoPen);
+            p->setBrush(QColor(48,150,72));
+            p->drawRect(QRect(progressTrack.left(),progressTrack.top(),filled,progressTrack.height()));
+        }
+    }
     if (reviewed) {
         QString reviewedText = QStringLiteral("reviewed");
         int reviewedW = p->fontMetrics().horizontalAdvance(reviewedText) + 14;

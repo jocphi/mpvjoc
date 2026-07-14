@@ -50,6 +50,8 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_AUTOMOC ON)
 
 find_package(Qt6 REQUIRED COMPONENTS Widgets OpenGLWidgets)
+
+find_package(SQLite3 REQUIRED)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(MPV REQUIRED IMPORTED_TARGET mpv)
 
@@ -74,12 +76,17 @@ add_executable(mpvjoc
     ui/MainWindowState.cpp
     ui/MainWindowPlaylist.cpp
     ui/PlaylistWorkspace.cpp
+    ui/PlaylistTabWidget.cpp
+    ui/PlaylistTabRenameController.cpp
     ui/MainWindowPlaylists.cpp
     ui/MainWindowPlayback.cpp
     ui/MainWindowMove.cpp
     ui/MainWindowMedia.cpp
     ui/MainWindowFileActions.cpp
     ui/MainWindowUi.cpp
+    family/FamilyDestinationRepository.cpp
+    family/FamilyFilenameParser.cpp
+    family/FamilyMoveEvaluator.cpp
 )
 
 target_include_directories(mpvjoc PRIVATE "${CMAKE_CURRENT_BINARY_DIR}/generated")
@@ -96,7 +103,7 @@ target_link_libraries(mpvjoc PRIVATE
     Qt6::Widgets
     Qt6::OpenGLWidgets
     PkgConfig::MPV
-)
+ SQLite3::SQLite3)
 
 # Development helper: audit shortcuts documented in the F12 help overlay.
 # This target is explicit-only; it is not part of the normal build.

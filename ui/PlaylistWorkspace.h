@@ -16,4 +16,5 @@ public:
     QLineEdit* searchEdit = nullptr;
     QLabel* summaryLabel = nullptr;
     QListView* view = nullptr;
+    bool locked = false;
 };

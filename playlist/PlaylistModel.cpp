@@ -7,7 +7,7 @@
 
 PlaylistModel::PlaylistModel(QObject*p):QAbstractListModel(p){}
 int PlaylistModel::rowCount(const QModelIndex&p)const{return p.isValid()?0:items.size();}
-QVariant PlaylistModel::data(const QModelIndex&i,int role)const{ if(!i.isValid()||i.row()<0||i.row()>=items.size())return{}; const auto&it=items[i.row()]; const bool inFolderGroup=!it.folderDropRoot.isEmpty(); const bool firstInFolderGroup=inFolderGroup&&(i.row()==0||items[i.row()-1].folderDropRoot!=it.folderDropRoot); const bool lastInFolderGroup=inFolderGroup&&(i.row()==items.size()-1||items[i.row()+1].folderDropRoot!=it.folderDropRoot); switch(role){case Qt::DisplayRole:case TitleRole:return it.title;case Qt::ToolTipRole:return QVariant();case PathRole:return it.path;case SizeRole:return it.sizeBytes;case DurationRole:return it.duration;case DurationKnownRole:return it.durationKnown;case CodecRole:return it.codec;case ResolutionRole:return it.resolution;case ContainerRole:return it.container;case MetadataProbedRole:return it.metadataProbed;case ThumbnailPathRole:return it.thumbnailPath;case ThumbnailReadyRole:return it.thumbnailReady;case ThumbnailAttemptedRole:return it.thumbnailAttempted;case ReviewedRole:return it.reviewed;case FolderDropGroupRole:return inFolderGroup;case FolderDropGroupFirstRole:return firstInFolderGroup;case FolderDropGroupLastRole:return lastInFolderGroup;default:return{};} }
+QVariant PlaylistModel::data(const QModelIndex&i,int role)const{ if(!i.isValid()||i.row()<0||i.row()>=items.size())return{}; const auto&it=items[i.row()]; const bool inFolderGroup=!it.folderDropRoot.isEmpty(); const bool firstInFolderGroup=inFolderGroup&&(i.row()==0||items[i.row()-1].folderDropRoot!=it.folderDropRoot); const bool lastInFolderGroup=inFolderGroup&&(i.row()==items.size()-1||items[i.row()+1].folderDropRoot!=it.folderDropRoot); switch(role){case Qt::DisplayRole:case TitleRole:return it.title;case Qt::ToolTipRole:return QVariant();case PathRole:return it.path;case SizeRole:return it.sizeBytes;case DurationRole:return it.duration;case DurationKnownRole:return it.durationKnown;case CodecRole:return it.codec;case ResolutionRole:return it.resolution;case ContainerRole:return it.container;case MetadataProbedRole:return it.metadataProbed;case ThumbnailPathRole:return it.thumbnailPath;case ThumbnailReadyRole:return it.thumbnailReady;case ThumbnailAttemptedRole:return it.thumbnailAttempted;case ReviewedRole:return it.reviewed;case FamilyMoveProgressRole:return it.familyMoveProgress;case FolderDropGroupRole:return inFolderGroup;case FolderDropGroupFirstRole:return firstInFolderGroup;case FolderDropGroupLastRole:return lastInFolderGroup;default:return{};} }
 Qt::ItemFlags PlaylistModel::flags(const QModelIndex&i)const{ auto f=QAbstractListModel::flags(i); return i.isValid()? f|Qt::ItemIsDragEnabled|Qt::ItemIsDropEnabled : f|Qt::ItemIsDropEnabled; }
 Qt::DropActions PlaylistModel::supportedDropActions()const{return Qt::MoveAction;} Qt::DropActions PlaylistModel::supportedDragActions()const{return Qt::MoveAction;}
 QStringList PlaylistModel::mimeTypes()const{return {"application/x-mpvjoc-row"};}
@@ -18,6 +18,29 @@ bool PlaylistModel::moveRowTo(int src,int final){ if(src==final||src<0||final<0|
 QStringList PlaylistModel::addFiles(const QStringList&files){ QVector<PlaylistItem> ns; QStringList added; QSet<QString> existing; for(const auto&i:items)existing.insert(i.path); for(auto f:files){ QFileInfo info(f); QString abs=info.absoluteFilePath(); if(!info.exists()||!info.isFile()||existing.contains(abs))continue; existing.insert(abs); PlaylistItem it; it.path=abs; it.title=info.fileName(); it.sizeBytes=info.size(); ns<<it; added<<it.path;} if(!ns.isEmpty()){beginInsertRows({},items.size(),items.size()+ns.size()-1); for(auto&i:ns)items<<i; endInsertRows();} return added; }
 QStringList PlaylistModel::addFolderGroup(const QStringList&files,const QString&folderRoot){int first=items.size();QString root=QFileInfo(folderRoot).absoluteFilePath();QStringList added=addFiles(files);if(!added.isEmpty()){for(int r=first;r<items.size();++r)items[r].folderDropRoot=root;emit dataChanged(index(first,0),index(items.size()-1,0),{FolderDropGroupRole,FolderDropGroupFirstRole,FolderDropGroupLastRole});}return added;}
 void PlaylistModel::clearFolderDropGroups(){bool changed=false;folderDropGroups.clear();for(auto&i:items){if(!i.folderDropRoot.isEmpty()){i.folderDropRoot.clear();changed=true;}}if(changed&&!items.isEmpty())emit dataChanged(index(0,0),index(items.size()-1,0),{FolderDropGroupRole,FolderDropGroupFirstRole,FolderDropGroupLastRole});}
+bool PlaylistModel::updatePathAt(int r,const QString&newPath){
+    if(r<0||r>=items.size())return false;
+    QFileInfo info(newPath);
+    if(newPath.isEmpty()||!info.exists()||!info.isFile())return false;
+    clearFolderDropGroups();
+    auto&item=items[r];
+    item.path=info.absoluteFilePath();
+    item.title=info.fileName();
+    item.sizeBytes=info.size();
+    item.thumbnailPath.clear();
+    item.thumbnailReady=false;
+    item.thumbnailAttempted=false;
+    emit dataChanged(index(r,0),index(r,0));
+    return true;
+}
+bool PlaylistModel::setFamilyMoveProgressAt(int r,int percent){
+    if(r<0||r>=items.size())return false;
+    const int normalized=percent<0?-1:qBound(0,percent,100);
+    if(items[r].familyMoveProgress==normalized)return true;
+    items[r].familyMoveProgress=normalized;
+    emit dataChanged(index(r,0),index(r,0),{FamilyMoveProgressRole});
+    return true;
+}
 QString PlaylistModel::pathAt(int r)const{return r>=0&&r<items.size()?items[r].path:QString();}
 QString PlaylistModel::folderDropRootAt(int r)const{return r>=0&&r<items.size()?items[r].folderDropRoot:QString();}
 bool PlaylistModel::isLastItemInFolderDropGroup(int r)const{if(r<0||r>=items.size()||items[r].folderDropRoot.isEmpty())return false;const QString root=items[r].folderDropRoot;for(int n=0;n<items.size();++n)if(n!=r&&items[n].folderDropRoot==root)return false;return true;}

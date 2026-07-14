@@ -5,12 +5,12 @@
 #include <QPair>
 #include "media/MetadataProbeManager.h"
 
-struct PlaylistItem{ QString path,title; qint64 sizeBytes=0; double duration=0; bool durationKnown=false; QString codec,resolution,container; bool metadataProbed=false; QString thumbnailPath; bool thumbnailReady=false; bool thumbnailAttempted=false; bool reviewed=false; QString folderDropRoot; };
+struct PlaylistItem{ QString path,title; qint64 sizeBytes=0; double duration=0; bool durationKnown=false; QString codec,resolution,container; bool metadataProbed=false; QString thumbnailPath; bool thumbnailReady=false; bool thumbnailAttempted=false; bool reviewed=false; QString folderDropRoot; int familyMoveProgress=-1; };
 
 class PlaylistModel: public QAbstractListModel{
     Q_OBJECT
 public:
-    enum Roles{PathRole=Qt::UserRole+1,TitleRole,SizeRole,DurationRole,DurationKnownRole,CodecRole,ResolutionRole,ContainerRole,MetadataProbedRole,ThumbnailPathRole,ThumbnailReadyRole,ThumbnailAttemptedRole,FolderDropGroupRole,FolderDropGroupFirstRole,FolderDropGroupLastRole,ReviewedRole};
+    enum Roles{PathRole=Qt::UserRole+1,TitleRole,SizeRole,DurationRole,DurationKnownRole,CodecRole,ResolutionRole,ContainerRole,MetadataProbedRole,ThumbnailPathRole,ThumbnailReadyRole,ThumbnailAttemptedRole,FolderDropGroupRole,FolderDropGroupFirstRole,FolderDropGroupLastRole,ReviewedRole,FamilyMoveProgressRole};
     explicit PlaylistModel(QObject*p=nullptr);
     int rowCount(const QModelIndex&p=QModelIndex())const override;
     QVariant data(const QModelIndex&i,int role=Qt::DisplayRole)const override;
@@ -25,6 +25,8 @@ public:
     QStringList addFiles(const QStringList&files);
     QStringList addFolderGroup(const QStringList&files,const QString&folderRoot=QString());
     void clearFolderDropGroups();
+    bool updatePathAt(int r,const QString&newPath);
+    bool setFamilyMoveProgressAt(int r,int percent);
     QString pathAt(int r)const;
     QString folderDropRootAt(int r)const;
     bool isLastItemInFolderDropGroup(int r)const;

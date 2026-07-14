@@ -40,6 +40,7 @@ void MainWindow::savePlaylistState(){
             QJsonObject playlist;
             playlist["name"]=rightTabs->tabText(tab);
             playlist["searchText"]=workspace->searchEdit->text();
+            playlist["locked"]=workspace->locked;
             QModelIndex selected=workspace->view->currentIndex();
             if(selected.isValid()&&selected.model()==workspace->proxy)
                 selected=workspace->proxy->mapToSource(selected);
@@ -104,9 +105,13 @@ void MainWindow::loadPlaylistState(){
                 if(name.isEmpty())name=QStringLiteral("Playlist %1").arg(index+1);
                 PlaylistWorkspace*workspace=createPlaylistWorkspace(name);
                 workspace->model->fromJson(saved["items"].toArray());
-                for(int row=workspace->model->count()-1;row>=0;--row)
-                    if(!QFileInfo::exists(workspace->model->pathAt(row)))workspace->model->removeRowAt(row);
+                const bool locked=saved["locked"].toBool(false);
+                if(!locked){
+                    for(int row=workspace->model->count()-1;row>=0;--row)
+                        if(!QFileInfo::exists(workspace->model->pathAt(row)))workspace->model->removeRowAt(row);
+                }
                 workspace->searchEdit->setText(saved["searchText"].toString());
+                setPlaylistWorkspaceLocked(rightTabs->indexOf(workspace),locked);
                 restored<<RestoredPlaylist{workspace,saved["selectedRow"].toInt(-1)};
             }
         }else{

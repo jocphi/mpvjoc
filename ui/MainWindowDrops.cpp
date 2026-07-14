@@ -69,13 +69,13 @@ bool MainWindow::eventFilter(QObject*o,QEvent*ev){if(o==playlistSearchEdit&&ev->
         if(shortcutCandidate){keyPressEvent(ke);ke->accept();return true;}
     }
     }
-    bool video=o==static_cast<QObject*>(mpvWidget); bool list=o==playlistView->viewport(); if((video||list)&&(ev->type()==QEvent::DragEnter||ev->type()==QEvent::DragMove||ev->type()==QEvent::Drop)){auto urls=[&](const QMimeData*m){QStringList f; if(!m)return f; for(auto u:m->urls())if(u.isLocalFile())f<<u.toLocalFile(); return f;}; if(ev->type()==QEvent::DragEnter){auto*e=static_cast<QDragEnterEvent*>(ev); if(e->mimeData()->hasUrls()){e->acceptProposedAction();return true;}} if(ev->type()==QEvent::DragMove){auto*e=static_cast<QDragMoveEvent*>(ev); if(e->mimeData()->hasUrls()){e->acceptProposedAction();return true;}} if(ev->type()==QEvent::Drop){auto*e=static_cast<QDropEvent*>(ev); QStringList f=urls(e->mimeData()); if(!f.isEmpty()){if(video)replacePlaylistWithDroppedPaths(f); else addDroppedPaths(f); e->acceptProposedAction();return true;}}} return QMainWindow::eventFilter(o,ev);}
+    bool video=o==static_cast<QObject*>(mpvWidget); bool list=o==playlistView->viewport(); if((video||list)&&(ev->type()==QEvent::DragEnter||ev->type()==QEvent::DragMove||ev->type()==QEvent::Drop)){auto urls=[&](const QMimeData*m){QStringList f; if(!m)return f; for(auto u:m->urls())if(u.isLocalFile())f<<u.toLocalFile(); return f;}; if(ev->type()==QEvent::DragEnter){auto*e=static_cast<QDragEnterEvent*>(ev); if(currentPlaylistLocked()){e->ignore();return true;} if(e->mimeData()->hasUrls()){e->acceptProposedAction();return true;}} if(ev->type()==QEvent::DragMove){auto*e=static_cast<QDragMoveEvent*>(ev); if(e->mimeData()->hasUrls()){e->acceptProposedAction();return true;}} if(ev->type()==QEvent::Drop){auto*e=static_cast<QDropEvent*>(ev); QStringList f=urls(e->mimeData()); if(!f.isEmpty()){if(video)replacePlaylistWithDroppedPaths(f); else addDroppedPaths(f); e->acceptProposedAction();return true;}}} return QMainWindow::eventFilter(o,ev);}
 
 void MainWindow::dragEnterEvent(QDragEnterEvent*e){if(e->mimeData()->hasUrls())e->acceptProposedAction();}
 
 void MainWindow::dropEvent(QDropEvent*e){QStringList f; for(auto u:e->mimeData()->urls())if(u.isLocalFile())f<<u.toLocalFile(); replacePlaylistWithDroppedPaths(f); e->acceptProposedAction();}
 
-void MainWindow::addDroppedPaths(const QStringList&paths){
+void MainWindow::addDroppedPaths(const QStringList&paths){if(currentPlaylistLocked())return;
     bool empty=playlistModel->count()==0;
     bool any=false;
     for(const QString&p:sortedDroppedPaths(paths)){
@@ -96,7 +96,7 @@ void MainWindow::addDroppedPaths(const QStringList&paths){
     updatePlaylistSummary();
 }
 
-void MainWindow::replacePlaylistWithDroppedPaths(const QStringList&paths){
+void MainWindow::replacePlaylistWithDroppedPaths(const QStringList&paths){if(currentPlaylistLocked())return;
     closeCurrentFile();
     playlistModel->clearItems();
     addDroppedPaths(paths);

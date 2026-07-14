@@ -21,7 +21,7 @@
 #include "playlist/PlaylistFormatting.h"
 #include <QSettings>
 
-void MainWindow::addFiles(const QStringList&files){bool empty=playlistModel->count()==0; auto added=playlistModel->addFiles(files); for(auto&p:added){metadataProbe->enqueue(p);thumbnailManager->enqueue(p);} if(empty&&playlistModel->count()>0)playPlaylistRow(0); savePlaylistState();}
+void MainWindow::addFiles(const QStringList&files){if(currentPlaylistLocked())return;bool empty=playlistModel->count()==0; auto added=playlistModel->addFiles(files); for(auto&p:added){metadataProbe->enqueue(p);thumbnailManager->enqueue(p);} if(empty&&playlistModel->count()>0)playPlaylistRow(0); savePlaylistState();}
 
 QModelIndex MainWindow::playlistViewIndexForRow(int sourceRow)const{
     if(!playlistModel||sourceRow<0||sourceRow>=playlistModel->count())return QModelIndex();
@@ -126,27 +126,28 @@ void MainWindow::playPreviousPlaylistFile(){if(playlistModel->count()<=0)return;
 int MainWindow::currentRow()const{auto idx=playlistView->currentIndex();if(!idx.isValid())return -1;if(playlistProxyModel&&idx.model()==playlistProxyModel)idx=playlistProxyModel->mapToSource(idx);else if(idx.model()!=playlistModel)return -1;return idx.row();}
 QString MainWindow::selectedPath()const{return playlistModel->pathAt(currentRow());}
 
-void MainWindow::removeMissingFilesFromPlaylist(){for(int r=playlistModel->count()-1;r>=0;--r){QString p=playlistModel->pathAt(r); if(!QFileInfo::exists(p))playlistModel->removeRowAt(r);}}
+void MainWindow::removeMissingFilesFromPlaylist(){if(currentPlaylistLocked())return;for(int r=playlistModel->count()-1;r>=0;--r){QString p=playlistModel->pathAt(r); if(!QFileInfo::exists(p))playlistModel->removeRowAt(r);}}
 
-void MainWindow::replacePlaylistWithFiles(const QStringList&files){closeCurrentFile(); playlistModel->clearItems(); addFiles(files); savePlaylistState();}
+void MainWindow::replacePlaylistWithFiles(const QStringList&files){if(currentPlaylistLocked())return;closeCurrentFile(); playlistModel->clearItems(); addFiles(files); savePlaylistState();}
 
-void MainWindow::playPlaylistRow(int r){if(r<0&&playlistModel&&playlistModel->count()>0&&mpvWidget&&mpvWidget->currentFilePath().isEmpty())r=0;if(r<0||r>=playlistModel->count())return; QString p=playlistModel->pathAt(r); if(!QFileInfo::exists(p)){playlistModel->removeRowAt(r); if(playlistModel->count()>0)setPlaylistCurrentSourceRow(qBound(0,r,playlistModel->count()-1)); savePlaylistState(); return;} setPlaylistCurrentSourceRow(r,true); suppressNextEndFileAdvance=true; mpvWidget->loadFile(p); QTimer::singleShot(750,this,[this]{suppressNextEndFileAdvance=false;}); mpvWidget->setFocus(Qt::ShortcutFocusReason); savePlaylistState();}
+void MainWindow::playPlaylistRow(int r){if(r<0&&playlistModel&&playlistModel->count()>0&&mpvWidget&&mpvWidget->currentFilePath().isEmpty())r=0;if(r<0||r>=playlistModel->count())return; QString p=playlistModel->pathAt(r); if(!QFileInfo::exists(p)){if(!currentPlaylistLocked()){playlistModel->removeRowAt(r); if(playlistModel->count()>0)setPlaylistCurrentSourceRow(qBound(0,r,playlistModel->count()-1)); savePlaylistState();} return;} setPlaylistCurrentSourceRow(r,true); suppressNextEndFileAdvance=true; mpvWidget->loadFile(p); QTimer::singleShot(750,this,[this]{suppressNextEndFileAdvance=false;}); mpvWidget->setFocus(Qt::ShortcutFocusReason); savePlaylistState();}
 
 void MainWindow::selectPath(const QString&p){for(int r=0;r<playlistModel->count();++r)if(playlistModel->pathAt(r)==p){setPlaylistCurrentSourceRow(r);return;}}
 
-void MainWindow::removeSelectedItem(){int r=currentRow(); if(playlistModel->removeRowAt(r)&&playlistModel->count()>0)setPlaylistCurrentSourceRow(qBound(0,r,playlistModel->count()-1)); savePlaylistState();}
+void MainWindow::removeSelectedItem(){if(currentPlaylistLocked())return;int r=currentRow(); if(playlistModel->removeRowAt(r)&&playlistModel->count()>0)setPlaylistCurrentSourceRow(qBound(0,r,playlistModel->count()-1)); savePlaylistState();}
 
-void MainWindow::clearPlaylist(){playlistModel->clearItems();savePlaylistState();}
+void MainWindow::clearPlaylist(){if(currentPlaylistLocked())return;playlistModel->clearItems();savePlaylistState();}
 
-void MainWindow::moveSelectedItemUp(){int r=currentRow(); if(playlistModel->moveRowUp(r))setPlaylistCurrentSourceRow(r-1);savePlaylistState();}
+void MainWindow::moveSelectedItemUp(){if(currentPlaylistLocked())return;int r=currentRow(); if(playlistModel->moveRowUp(r))setPlaylistCurrentSourceRow(r-1);savePlaylistState();}
 
-void MainWindow::moveSelectedItemDown(){int r=currentRow(); if(playlistModel->moveRowDown(r))setPlaylistCurrentSourceRow(r+1);savePlaylistState();}
+void MainWindow::moveSelectedItemDown(){if(currentPlaylistLocked())return;int r=currentRow(); if(playlistModel->moveRowDown(r))setPlaylistCurrentSourceRow(r+1);savePlaylistState();}
 
-void MainWindow::toggleReviewedForCurrent(){int r=currentRow();if(r<0)return;playlistModel->toggleReviewedAt(r);savePlaylistState();}
+void MainWindow::toggleReviewedForCurrent(){if(currentPlaylistLocked())return;int r=currentRow();if(r<0)return;playlistModel->toggleReviewedAt(r);savePlaylistState();}
 void MainWindow::showPlaylistContextMenu(const QPoint&p){
     const int row=currentRow();
     const bool hasRow=playlistModel&&row>=0&&row<playlistModel->count();
     const bool reviewed=hasRow&&playlistModel->index(row,0).data(PlaylistModel::ReviewedRole).toBool();
+    const bool locked=currentPlaylistLocked();
 
     QMenu menu(this);
 
@@ -155,33 +156,33 @@ void MainWindow::showPlaylistContextMenu(const QPoint&p){
     connect(playAction,&QAction::triggered,this,[this,row]{playPlaylistRow(row);});
 
     QAction*reviewedAction=menu.addAction(reviewed?QStringLiteral("Mark unreviewed"):QStringLiteral("Mark reviewed"));
-    reviewedAction->setEnabled(hasRow);
+    reviewedAction->setEnabled(hasRow&&!locked);
     connect(reviewedAction,&QAction::triggered,this,[this]{toggleReviewedForCurrent();});
 
     menu.addSeparator();
 
     QAction*removeAction=menu.addAction(QStringLiteral("Remove from playlist"));
-    removeAction->setEnabled(hasRow);
+    removeAction->setEnabled(hasRow&&!locked);
     connect(removeAction,&QAction::triggered,this,[this,row]{if(row>=0&&playlistModel){playlistModel->removeRowAt(row);updatePlaylistSummary();savePlaylistState();}});
 
     QAction*trashAction=menu.addAction(QStringLiteral("Move file to trash"));
-    trashAction->setEnabled(hasRow);
+    trashAction->setEnabled(hasRow&&!locked);
     connect(trashAction,&QAction::triggered,this,[this]{moveSelectedFileToTrash();});
 
     menu.addSeparator();
 
     QAction*upAction=menu.addAction(QStringLiteral("Move up"));
-    upAction->setEnabled(hasRow&&row>0);
+    upAction->setEnabled(hasRow&&!locked&&row>0);
     connect(upAction,&QAction::triggered,this,[this,row]{if(playlistModel&&playlistModel->moveRowUp(row)){setPlaylistCurrentSourceRow(row-1,true);savePlaylistState();}});
 
     QAction*downAction=menu.addAction(QStringLiteral("Move down"));
-    downAction->setEnabled(hasRow&&playlistModel&&row<playlistModel->count()-1);
+    downAction->setEnabled(hasRow&&!locked&&playlistModel&&row<playlistModel->count()-1);
     connect(downAction,&QAction::triggered,this,[this,row]{if(playlistModel&&playlistModel->moveRowDown(row)){setPlaylistCurrentSourceRow(row+1,true);savePlaylistState();}});
 
     menu.addSeparator();
 
     QAction*clearAction=menu.addAction(QStringLiteral("Clear playlist"));
-    clearAction->setEnabled(playlistModel&&playlistModel->count()>0);
+    clearAction->setEnabled(!locked&&playlistModel&&playlistModel->count()>0);
     connect(clearAction,&QAction::triggered,this,[this]{while(playlistModel&&playlistModel->count()>0)playlistModel->removeRowAt(0);updatePlaylistSummary();savePlaylistState();});
 
     menu.exec(playlistView->viewport()->mapToGlobal(p));

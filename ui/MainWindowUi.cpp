@@ -1,5 +1,7 @@
 #include "MainWindow.h"
 #include "PlaylistWorkspace.h"
+#include "PlaylistTabWidget.h"
+#include "PlaylistTabRenameController.h"
 #include "TimelineWidget.h"
 #include "media/MetadataProbeManager.h"
 #include "media/ThumbnailManager.h"
@@ -21,9 +23,11 @@
 #include <QPaintEvent>
 #include <QPushButton>
 #include <QShortcut>
+#include <QSettings>
 #include <QSizePolicy>
 #include <QSplitter>
 #include <QTabWidget>
+#include <QTabBar>
 #include <QTextEdit>
 #include <QTimer>
 #include <QVBoxLayout>
@@ -52,14 +56,14 @@ protected:
 };
 }
 
-MainWindow::MainWindow(){ setWindowFlag(Qt::FramelessWindowHint, true); mpvWidget=new MpvWidget(this); metadataProbe=new MetadataProbeManager(this); thumbnailManager=new ThumbnailManager(this); rightTabs=new QTabWidget(this); rightTabs->setTabsClosable(true); rightTabs->setMovable(true); auto*initialPlaylist=createPlaylistWorkspace(QStringLiteral("Playlist 1")); Q_UNUSED(initialPlaylist);
+MainWindow::MainWindow(){ setWindowFlag(Qt::FramelessWindowHint, true); mpvWidget=new MpvWidget(this); metadataProbe=new MetadataProbeManager(this); thumbnailManager=new ThumbnailManager(this); rightTabs=new PlaylistTabWidget(this); rightTabs->setTabsClosable(true); rightTabs->setMovable(true); auto*initialPlaylist=createPlaylistWorkspace(QStringLiteral("Playlist 1")); Q_UNUSED(initialPlaylist);
  timeline=new TimelineWidget(this); timeline->installEventFilter(this);
  timeLabel=new QLabel("00:00:00 / 00:00:00",this);
  titleStatusLabel=new HighlightedStatusLabel(QStringLiteral("No file loaded"),this);
  muteButton=new QPushButton("Volume: 100%",this);
  autoPlayButton=new QPushButton("autoplay",this);
  scaleStatusButton=new QPushButton("1x · --% actual",this);
- clipButton=new QPushButton("clipped",this);
+ clipButton=new QPushButton("clipped",this); hwdecButton=new QPushButton("software",this);
  auto statusLabelStyle=QStringLiteral("QLabel{background:#181818;color:#eeeeee;border:1px solid #555;padding:2px 7px;}");
  timeLabel->setStyleSheet(statusLabelStyle);
 
@@ -68,7 +72,7 @@ MainWindow::MainWindow(){ setWindowFlag(Qt::FramelessWindowHint, true); mpvWidge
  timeLabel->setMinimumWidth(145);
  titleStatusLabel->setSizePolicy(QSizePolicy::Expanding,QSizePolicy::Fixed);
  titleStatusLabel->setTextInteractionFlags(Qt::TextSelectableByMouse);
- for(auto*b:{muteButton,autoPlayButton,scaleStatusButton,clipButton}){b->setFocusPolicy(Qt::NoFocus);b->setSizePolicy(QSizePolicy::Minimum,QSizePolicy::Fixed);}
+ for(auto*b:{muteButton,autoPlayButton,scaleStatusButton,clipButton,hwdecButton}){b->setFocusPolicy(Qt::NoFocus);b->setSizePolicy(QSizePolicy::Minimum,QSizePolicy::Fixed);}
  auto*statusBar=new QHBoxLayout;
  statusBar->setContentsMargins(1,1,1,1);
  statusBar->setSpacing(1);
@@ -77,13 +81,46 @@ MainWindow::MainWindow(){ setWindowFlag(Qt::FramelessWindowHint, true); mpvWidge
  statusBar->addWidget(muteButton);
  statusBar->addWidget(autoPlayButton);
  statusBar->addWidget(scaleStatusButton);
- statusBar->addWidget(clipButton);
- auto*leftL=new QVBoxLayout; leftL->setContentsMargins(0,0,0,0); leftL->setSpacing(1); leftL->addWidget(mpvWidget,1); leftL->addWidget(timeline); leftL->addLayout(statusBar); auto*leftW=new QWidget(this); leftW->setLayout(leftL); auto*addPlaylistButton=new QPushButton(QStringLiteral("+"),rightTabs); addPlaylistButton->setFixedSize(28,24); addPlaylistButton->setToolTip(QStringLiteral("Add playlist")); rightTabs->setCornerWidget(addPlaylistButton,Qt::TopRightCorner); connect(addPlaylistButton,&QPushButton::clicked,this,&MainWindow::addPlaylistWorkspace); connect(rightTabs,&QTabWidget::currentChanged,this,&MainWindow::activatePlaylistWorkspace); connect(rightTabs,&QTabWidget::tabCloseRequested,this,&MainWindow::closePlaylistWorkspace); auto*rightL=new QVBoxLayout; rightL->setContentsMargins(1,1,1,1); rightL->setSpacing(1); rightL->addWidget(rightTabs,1); auto*rightW=new QWidget(this); rightW->setLayout(rightL); playlistSplitter=new QSplitter(this); playlistSplitter->setHandleWidth(1); playlistSplitter->addWidget(leftW); playlistSplitter->addWidget(rightW); playlistSplitter->setStretchFactor(0,5); playlistSplitter->setStretchFactor(1,1); setCentralWidget(playlistSplitter); resize(1280,720); setWindowTitle(QStringLiteral("mpvjoc %1").arg(QString::fromLatin1(MPVJOC_VERSION))); setAcceptDrops(true); mpvWidget->setAcceptDrops(true); mpvWidget->installEventFilter(this);
+ statusBar->addWidget(clipButton); statusBar->addWidget(hwdecButton);
+ auto*leftL=new QVBoxLayout; leftL->setContentsMargins(0,0,0,0); leftL->setSpacing(1); leftL->addWidget(mpvWidget,1); leftL->addWidget(timeline); leftL->addLayout(statusBar); auto*leftW=new QWidget(this); leftW->setLayout(leftL); auto*playlistTabCorner=new QWidget(rightTabs);
+ auto*playlistTabCornerLayout=new QHBoxLayout(playlistTabCorner);
+ playlistTabCornerLayout->setContentsMargins(0,0,0,0);
+ playlistTabCornerLayout->setSpacing(2);
+ auto*previousPlaylistButton=new QPushButton(QString::fromUtf8("◀"),playlistTabCorner);
+ auto*nextPlaylistButton=new QPushButton(QString::fromUtf8("▶"),playlistTabCorner);
+ auto*addPlaylistButton=new QPushButton(QStringLiteral("+"),playlistTabCorner);
+ for(auto*button:{previousPlaylistButton,nextPlaylistButton,addPlaylistButton}){
+     button->setFixedSize(28,24);
+     button->setFocusPolicy(Qt::NoFocus);
+ }
+ previousPlaylistButton->setToolTip(QStringLiteral("Select previous playlist tab"));
+ nextPlaylistButton->setToolTip(QStringLiteral("Select next playlist tab"));
+ addPlaylistButton->setToolTip(QStringLiteral("Add playlist"));
+ playlistTabCornerLayout->addWidget(previousPlaylistButton);
+ playlistTabCornerLayout->addWidget(nextPlaylistButton);
+ playlistTabCornerLayout->addWidget(addPlaylistButton);
+ rightTabs->setCornerWidget(playlistTabCorner,Qt::TopRightCorner);
+ auto updatePlaylistNavigationButtons=[this,previousPlaylistButton,nextPlaylistButton]{
+     const int current=rightTabs->currentIndex();
+     previousPlaylistButton->setEnabled(current>0);
+     nextPlaylistButton->setEnabled(current>=0&&current<rightTabs->count()-1);
+ };
+ connect(previousPlaylistButton,&QPushButton::clicked,this,[this]{
+     if(rightTabs->currentIndex()>0)rightTabs->setCurrentIndex(rightTabs->currentIndex()-1);
+ });
+ connect(nextPlaylistButton,&QPushButton::clicked,this,[this]{
+     if(rightTabs->currentIndex()<rightTabs->count()-1)rightTabs->setCurrentIndex(rightTabs->currentIndex()+1);
+ });
+ connect(addPlaylistButton,&QPushButton::clicked,this,&MainWindow::addPlaylistWorkspace); connect(rightTabs,&QTabWidget::currentChanged,this,[this,updatePlaylistNavigationButtons](int index){
+     activatePlaylistWorkspace(index);
+     updatePlaylistNavigationButtons();
+ }); connect(rightTabs,&QTabWidget::tabCloseRequested,this,&MainWindow::closePlaylistWorkspace); updatePlaylistNavigationButtons(); playlistTabRenameController=new PlaylistTabRenameController(rightTabs->tabBar(),[this]{if(!restoringPlaybackState)savePlaylistState();},rightTabs); rightTabs->tabBar()->setContextMenuPolicy(Qt::CustomContextMenu); connect(rightTabs->tabBar(),&QTabBar::customContextMenuRequested,this,&MainWindow::showPlaylistTabContextMenu); auto*rightL=new QVBoxLayout; rightL->setContentsMargins(1,1,1,1); rightL->setSpacing(1); rightL->addWidget(rightTabs,1); auto*rightW=new QWidget(this); rightW->setLayout(rightL); playlistSplitter=new QSplitter(this); playlistSplitter->setHandleWidth(1); playlistSplitter->addWidget(leftW); playlistSplitter->addWidget(rightW); playlistSplitter->setStretchFactor(0,5); playlistSplitter->setStretchFactor(1,1); setCentralWidget(playlistSplitter); resize(1280,720); setWindowTitle(QStringLiteral("mpvjoc %1").arg(QString::fromLatin1(MPVJOC_VERSION))); setAcceptDrops(true); mpvWidget->setAcceptDrops(true); mpvWidget->installEventFilter(this);
  auto*quitShortcut=new QShortcut(QKeySequence(Qt::Key_Q),this); quitShortcut->setContext(Qt::WindowShortcut); connect(quitShortcut,&QShortcut::activated,this,&MainWindow::close);
  connect(muteButton,&QPushButton::clicked,this,[this]{mpvWidget->toggleMute();});
  connect(autoPlayButton,&QPushButton::clicked,this,[this]{setAutoPlayNextEnabled(!autoPlayNextEnabled);});
  connect(scaleStatusButton,&QPushButton::clicked,this,[this]{setMaxVideoScale(maxVideoScale==0.5?1.0:(maxVideoScale==1.0?2.0:0.5));});
  connect(clipButton,&QPushButton::clicked,this,[this]{setClipVideoToScale(!clipVideoToScale);});
+ connect(hwdecButton,&QPushButton::clicked,this,[this]{setHardwareDecodingMode(hardwareDecodingMode==QStringLiteral("no")?lastHardwareDecodingMode:QStringLiteral("no"));});
  connect(playlistSplitter,&QSplitter::splitterMoved,this,[this]{savePlaylistState();});
  fastPlaybackTimer=new QTimer(this);
  fastPlaybackTimer->setInterval(1000);
@@ -92,5 +129,5 @@ MainWindow::MainWindow(){ setWindowFlag(Qt::FramelessWindowHint, true); mpvWidge
  metadataProbe->metadataFailed=[this](const QString&p){for(auto*w:playlistWorkspaces)w->model->markProbeFailed(p);if(!restoringPlaybackState)savePlaylistState();};
  thumbnailManager->thumbnailReady=[this](const QString&p,const QString&t){for(auto*w:playlistWorkspaces)w->model->setThumbnailForPath(p,t);if(!restoringPlaybackState)savePlaylistState();};
  thumbnailManager->thumbnailFailed=[this](const QString&p){for(auto*w:playlistWorkspaces)w->model->markThumbnailFailed(p);if(!restoringPlaybackState)savePlaylistState();};
- mpvWidget->onPosition=[this](double s){onPositionChanged(s);}; mpvWidget->onDuration=[this](double s){onDurationChanged(s);}; mpvWidget->onPause=[this](bool p){mpvWidget->showPlaybackOverlay(p);}; mpvWidget->onFile=[this](QString p){const QString name=QFileInfo(p).fileName();timeline->setTitle(name);if(titleStatusLabel)titleStatusLabel->setText(name.isEmpty()?QStringLiteral("No file loaded"):name);selectPath(p);updateScaleButtons();QTimer::singleShot(300,this,[this]{if(mpvWidget)mpvWidget->showScaleOverlay();updateScaleButtons();});}; mpvWidget->onEndFile=[this]{if(suppressNextEndFileAdvance){suppressNextEndFileAdvance=false;return;}if(autoPlayNextEnabled&&playlistModel->count()>1)playNextPlaylistFile();}; mpvWidget->onVolume=[this](double v){if(restoringPlaybackState)return;currentVolume=v;updateMuteVolumeButton();if(mpvWidget)mpvWidget->showVolumeOverlay(currentVolume,currentMuted);savePlaylistState();}; mpvWidget->onMute=[this](bool m){if(restoringPlaybackState)return;currentMuted=m;updateMuteVolumeButton();if(mpvWidget)mpvWidget->showVolumeOverlay(currentVolume,currentMuted);savePlaylistState();}; timeline->seekRequested=[this](double s){mpvWidget->seekAbsolute(s);}; timeline->previewPositionChanged=[this](double s){updateTimeLabel(s,duration);}; updateScaleButtons(); updateClipButton(); updateAutoPlayButton(); mpvWidget->setMaxVideoScale(maxVideoScale); mpvWidget->setClipVideoToScale(clipVideoToScale); updateMuteVolumeButton(); updateMoveButtons(); loadPlaylistState(); loadMoveConfig(); updatePlaylistSummary(); QTimer::singleShot(900,this,[this]{restoringPlaybackState=false;}); probeMissingMetadata(); generateMissingThumbnails(); }
+ mpvWidget->onPosition=[this](double s){onPositionChanged(s);}; mpvWidget->onDuration=[this](double s){onDurationChanged(s);}; mpvWidget->onPause=[this](bool p){mpvWidget->showPlaybackOverlay(p);}; mpvWidget->onFile=[this](QString p){const QString name=QFileInfo(p).fileName();timeline->setTitle(name);if(titleStatusLabel)titleStatusLabel->setText(name.isEmpty()?QStringLiteral("No file loaded"):name);selectPath(p);updateScaleButtons();QTimer::singleShot(300,this,[this]{if(mpvWidget)mpvWidget->showScaleOverlay();updateScaleButtons();});}; mpvWidget->onEndFile=[this]{if(suppressNextEndFileAdvance){suppressNextEndFileAdvance=false;return;}if(autoPlayNextEnabled&&playlistModel->count()>1)playNextPlaylistFile();}; mpvWidget->onVolume=[this](double v){if(restoringPlaybackState)return;currentVolume=v;updateMuteVolumeButton();if(mpvWidget)mpvWidget->showVolumeOverlay(currentVolume,currentMuted);savePlaylistState();}; mpvWidget->onMute=[this](bool m){if(restoringPlaybackState)return;currentMuted=m;updateMuteVolumeButton();if(mpvWidget)mpvWidget->showVolumeOverlay(currentVolume,currentMuted);savePlaylistState();}; timeline->seekRequested=[this](double s){mpvWidget->seekAbsolute(s);}; timeline->previewPositionChanged=[this](double s){updateTimeLabel(s,duration);}; hardwareDecodingMode=QSettings().value(QStringLiteral("video/hwdecMode")).toString().trimmed().toLower(); if(hardwareDecodingMode.isEmpty()){const bool legacyHardwareDecoding=QSettings().value(QStringLiteral("video/hardwareDecoding"),false).toBool();hardwareDecodingMode=legacyHardwareDecoding?QStringLiteral("auto-safe"):QStringLiteral("no");} lastHardwareDecodingMode=QSettings().value(QStringLiteral("video/lastHardwareDecodingMode"),hardwareDecodingMode==QStringLiteral("no")?QStringLiteral("auto-safe"):hardwareDecodingMode).toString().trimmed().toLower(); if(lastHardwareDecodingMode.isEmpty()||lastHardwareDecodingMode==QStringLiteral("no"))lastHardwareDecodingMode=QStringLiteral("auto-safe"); updateScaleButtons(); updateClipButton(); updateAutoPlayButton(); updateHardwareDecodingButton(); mpvWidget->setMaxVideoScale(maxVideoScale); mpvWidget->setClipVideoToScale(clipVideoToScale); updateMuteVolumeButton(); updateMoveButtons(); loadPlaylistState(); loadMoveConfig(); loadFamilyDestinationSettings(); refreshFamilyDestinations(); updatePlaylistSummary(); QTimer::singleShot(900,this,[this]{restoringPlaybackState=false;}); probeMissingMetadata(); generateMissingThumbnails(); }
 
